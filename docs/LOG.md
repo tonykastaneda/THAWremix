@@ -49,6 +49,10 @@ Formats (readers in `tools/*.py` and `thaw-bevy/src/formats`):
 Manual triggers come from `manualtricks.qb`: up then down (or down then up for a nose manual)
 within 400 ms, valid for 700 ms before landing; from rolling, within 220 ms.
 
+Grind base scores sit inside script bytecode in `grindscripts.qb`: 50-50, Nosegrind and 5-0 are 100,
+Crooked, Overcrook and Smith 125, Tailslide and Noseslide 150, Boardslide and Lipslide 200. The game
+prefixes FS or BS by approach side; I do not yet.
+
 Physics values are read at runtime from `scripts\game\skater\physics.qb` inside `qb.pak.wpc`.
 Stat-driven values evaluate as `lo + (hi - lo) * stat * 0.1`.
 
