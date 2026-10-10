@@ -1,0 +1,11 @@
+/THAW CLEAN/
+/BMXXX/
+/extracted/
+/ref/
+/bin/
+target/
+*.gzf
+*.rep/
+.claude/away.flag
+/ghidra/proj/
+__pycache__/
