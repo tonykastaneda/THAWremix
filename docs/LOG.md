@@ -115,6 +115,8 @@ others did 11 to 40 times, mostly by launching off ramps at the map edge.
   state. The two ends of a tunnel are different geometry, so the offset cannot be read off them. A kill plane resets you if you leave the map.
 - A few additive effects (light cones, spotlight beams) render as solid shards.
 - The sky is `default_sky` for every area. No animated or multi-pass materials, no level objects, no translucency sorting.
+- The rider is modelled on the character sheet you supplied (green hoodie, black baggy trousers,
+  backwards cap with lime brim, red hair and sunglasses, lime-wheeled board with a bolt graphic).
 - The rider and board are an original low-poly figure in a PS1-era style (tapered flat-shaded parts,
   baked vertex shading, a 32x16 pixel-art face and shirt print drawn in code) posed procedurally
   (stand, crouch, tuck, grab, balance, bail, board flip). By your choice it is not the game's model;
