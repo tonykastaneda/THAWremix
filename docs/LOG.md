@@ -38,8 +38,11 @@ Formats (readers in `tools/*.py` and `thaw-bevy/src/formats`):
   still compressed.
 - **Sectors**: each named level piece owns a consecutive run of meshes (count at +0x4C of its 0x68
   record); the counts sum exactly to the mesh total. Every sector and collision object has a node.
-  Pieces without `CreatedAtStart` (320 of 1,041 in Hollywood: story and script variants) are
-  dropped from rendering and collision; `LevelObject`s are moved from the origin to their node
+  A piece exists if it has `CreatedAtStart`, or its `CreatedFromVariable` node flag is on. Flag
+  values come from the game's own free-skate script (`game_progress_set_non_story_mode_nodeflags`
+  in `chapter_info.qb`, LZSS-compressed bytecode: 273 flags, 124 on), so the world is in its
+  unlocked state and the Skate Ranch is fully built. Everything else is dropped from rendering,
+  collision and rails; `LevelObject`s are moved from the origin to their node
   position.
 - **`dbg.pak.wpc`** holds 139,692 hash-to-name pairs, which is why every parameter has its real name.
 
@@ -86,6 +89,10 @@ rail corner following, grind type selection, the revert window
   meter (Invert, 500), drops back in, lands, banks 676.
 - **wall**: glancing airborne approach to a wall-ridable face, wallride, ollie off, land, combo banked.
 
+`--headless soak` feeds 120,000 frames (33 minutes) of random input: no panics and no non-finite
+state in Hollywood, Beverly Hills, Skate Ranch or the Vans park. Hollywood never left the level; the
+others did 11 to 40 times, mostly by launching off ramps at the map edge.
+
 `--screenshot <png>` runs a short scripted session in the window and saves a frame.
 
 ## Known gaps
@@ -94,8 +101,7 @@ rail corner following, grind type selection, the revert window
   East LA, the Vans park and the Skate Ranch still need a teleport from their tunnels.
 - Pieces that scripts create or kill later (story changes, breakables) stay in their level-start
   state. The two ends of a tunnel are different geometry, so the offset cannot be read off them. A kill plane resets you if you leave the map.
-- A few additive effects (light cones) render as solid shards. The Skate Ranch loads in its
-  level-start state, which is mostly bare dirt: the park pieces arrive through the story.
+- A few additive effects (light cones, spotlight beams) render as solid shards.
 - The sky is `default_sky` for every area. No animated or multi-pass materials, no level objects, no translucency sorting.
 - No skater model or animation: a capsule on a board.
 - Trick slots follow the game's default mapping in `protricks.qb` (16 air tricks with diagonals,
