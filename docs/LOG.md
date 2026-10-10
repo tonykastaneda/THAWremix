@@ -9,7 +9,8 @@ rolling, ollie, grind), plus BMX XXX unpacked and loaded into Ghidra.
 |---|---|---|
 | Which THAW executable to analyse | `D:\Games\THAW\Game\reTHAWed.exe` (read-only) | The clean `THAW.exe` is SecuROM-protected: its code sections are encrypted on disk (entropy 8.00, none of the physics parameter hashes appear in it). I did not try to defeat that. The mod's executable is plain x86 and contains the same engine. Formulas taken from it may include mod changes; all *values* come from the clean install's data. |
 | Which level first | Hollywood (`z_ho`), `--zone` picks another | It is the game's first level; Skate Ranch (`z_sr`) also loads. |
-| What to render | The collision mesh, tinted by surface type, rails as yellow lines | The visual scene format (`.geom`) and textures are not decoded yet. Gameplay only needs collision. |
+| What to render | The game's own textured geometry (`--collision-view` shows the collision mesh instead; F1 toggles rail lines) | Decoded `.geom` and `.tex` later in the night; see formats. |
+| Which zones to load together | The chosen area, its tunnel pieces (`z_hobh`, `z_hodt`) and its shops | I first loaded every zone at once and they overlapped. Measured it: each main area has its own origin (Downtown and East LA share 24 of ~45 dense map cells). Tunnel pieces are named after the area they belong to. |
 | Skater stats | All stats at 5 | That is `Skater_Default_Stats` in the game's scripts. |
 | Auto-kick | On | The series default; without it you would have to hold a push button. |
 | Units | Inches and seconds, +Y up, 60 Hz fixed step | The game's own; the executable multiplies several per-frame terms by 60. |
@@ -29,6 +30,12 @@ Formats (readers in `tools/*.py` and `thaw-bevy/src/formats`):
   faces with flags and terrain type. Validated on two levels: 0 bad indices, 0 verts outside bboxes.
 - **Node arrays**: restarts and rail nodes with links. "Compressed" nodes inherit shared fields from a
   named top-level struct.
+- **`.geom`**: 963-1,528 materials of 0x120 bytes (texture checksum at +0x40), then a `BABEFACE` scene
+  block with 0xE0-byte mesh headers (material, vertex stride and attribute offsets, counts, buffer
+  offsets). Vertices are position, normal, BGRA colour (0x80 = full) and UVs; indices are 16-bit
+  triangle strips. All 2,390 Skate Ranch and 3,027 Hollywood meshes pass index checks.
+- **`.tex`**: `ABADD00D`-tagged textures, DXT1/DXT5 (a few raw), with mip chains. Uploaded to the GPU
+  still compressed.
 - **`dbg.pak.wpc`** holds 139,692 hash-to-name pairs, which is why every parameter has its real name.
 
 Physics values are read at runtime from `scripts\game\skater\physics.qb` inside `qb.pak.wpc`.
@@ -67,8 +74,9 @@ rail snapping and corner following, manual input window, grind type selection, c
 
 ## Known gaps
 
-- Levels are streamed in the real game. Doorways into shops and neighbouring zones have no floor in
-  the single zone I load, so you can roll out of the level; a kill plane resets you.
+- Riding through a tunnel does not swap to the next area yet (each area has its own origin, so this
+  needs a teleport between the two ends of the tunnel). A kill plane resets you if you leave the map.
+- No skybox, no animated or multi-pass materials, no level objects, no translucency sorting.
 - No skater model or animation: a capsule on a board.
 - No lip tricks, wallrides, wallplants, reverts, spine transfers, walking, or special tricks.
 - Level objects with their own collision (`data\models\*.col.wpc`) are not placed.
@@ -82,7 +90,7 @@ All three discs are unpacked under `extracted/`:
 |---|---|---|---|
 | PS2 | 7-Zip | `SLUS_204.15`, MIPS ELF, no symbols | Imported into Ghidra; stock MIPS support fails on most functions, needs the Emotion Engine extension |
 | GameCube | DolphinTool (`.rvz` works directly) | `main.dol`, PowerPC | Unpacked only; includes test levels (`TST_FLAT`, `TST_GRND`, `TST_VERT`) |
-| Xbox | extract-xiso | `default.xbe`, x86 | Flattened to a memory image (`tools/xbe2img.py`) and imported into Ghidra |
+| Xbox | extract-xiso | `default.xbe`, x86 | Flattened to a memory image (`tools/xbe2img.py`), imported into Ghidra with a raw loader, 2,876 functions decompiled to `extracted/decomp_bmx_xbox` with no decode failures |
 
 The game is Z-Axis's engine ("Zge4"), written in C. Assert strings name the source files
 (`\bmx3\src\com\action\physics.c`, `camera.c`, `game.c`), and the discs carry plain-text config
