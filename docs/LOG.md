@@ -10,7 +10,7 @@ rolling, ollie, grind), plus BMX XXX unpacked and loaded into Ghidra.
 | Which THAW executable to analyse | `D:\Games\THAW\Game\reTHAWed.exe` (read-only) | The clean `THAW.exe` is SecuROM-protected: its code sections are encrypted on disk (entropy 8.00, none of the physics parameter hashes appear in it). I did not try to defeat that. The mod's executable is plain x86 and contains the same engine. Formulas taken from it may include mod changes; all *values* come from the clean install's data. |
 | Which level first | Hollywood (`z_ho`), `--zone` picks another | It is the game's first level; Skate Ranch (`z_sr`) also loads. |
 | What to render | The game's own textured geometry (`--collision-view` shows the collision mesh instead; F1 toggles rail lines) | Decoded `.geom` and `.tex` later in the night; see formats. |
-| Which zones to load together | The chosen area, its tunnel pieces (`z_hobh`, `z_hodt`) and its shops | I first loaded every zone at once and they overlapped. Measured it: each main area has its own origin (Downtown and East LA share 24 of ~45 dense map cells). Tunnel pieces are named after the area they belong to. |
+| Which zones to load together | The chosen area, its tunnel pieces (`z_hobh`, `z_hodt`) and its shops. `--world` also loads the other areas that share its space (experimental) | Loading every zone at once overlapped. Measured from collision: Hollywood, Beverly Hills, Santa Monica, Downtown, the casino and the oil rig do not overlap each other, so they share one space; East LA sits on top of Downtown, the Vans park on Hollywood and the Skate Ranch across Beverly Hills, so those have their own origin. With `--world` another area's backdrop shell blocks the view down Hollywood Boulevard, so it is off by default. |
 | Skater stats | All stats at 5 | That is `Skater_Default_Stats` in the game's scripts. |
 | Auto-kick | On | The series default; without it you would have to hold a push button. |
 | Units | Inches and seconds, +Y up, 60 Hz fixed step | The game's own; the executable multiplies several per-frame terms by 60. |
@@ -81,8 +81,9 @@ rail snapping and corner following, manual input window, grind type selection, t
 
 ## Known gaps
 
-- Riding through a tunnel does not swap to the next area yet (each area has its own origin, so this
-  needs a teleport between the two ends of the tunnel). A kill plane resets you if you leave the map.
+- Riding through a tunnel does not bring in the next area. For the six areas in one space this needs
+  streaming and hiding each area's backdrop shell; East LA, the Vans park and the Skate Ranch need a
+  teleport. The two ends of a tunnel are different geometry, so the offset cannot be read off them. A kill plane resets you if you leave the map.
 - Some distant surfaces in Skate Ranch render as black-and-white streaks (probably multi-pass or
   alpha materials I treat as plain).
 - No skybox, no animated or multi-pass materials, no level objects, no translucency sorting.
