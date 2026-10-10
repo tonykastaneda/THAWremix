@@ -87,6 +87,7 @@ rail corner following, grind type selection, the revert window
   with the combo still open.
 - **lip**: vert air, grind button on the way down stalls on the coping for 1.5 s on the lip balance
   meter (Invert, 500), drops back in, lands, banks 676.
+- **boneless**: up, up, then jump gives a Boneless: 99.5 in high against 72.7 for an ollie, 250 points.
 - **wall**: glancing airborne approach to a wall-ridable face, wallride, ollie off, land, combo banked.
 
 `--headless soak` feeds 120,000 frames (33 minutes) of random input: no panics and no non-finite
