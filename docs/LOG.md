@@ -36,6 +36,11 @@ Formats (readers in `tools/*.py` and `thaw-bevy/src/formats`):
   triangle strips. All 2,390 Skate Ranch and 3,027 Hollywood meshes pass index checks.
 - **`.tex`**: `ABADD00D`-tagged textures, DXT1/DXT5 (a few raw), with mip chains. Uploaded to the GPU
   still compressed.
+- **Sectors**: each named level piece owns a consecutive run of meshes (count at +0x4C of its 0x68
+  record); the counts sum exactly to the mesh total. Every sector and collision object has a node.
+  Pieces without `CreatedAtStart` (320 of 1,041 in Hollywood: story and script variants) are
+  dropped from rendering and collision; `LevelObject`s are moved from the origin to their node
+  position.
 - **`dbg.pak.wpc`** holds 139,692 hash-to-name pairs, which is why every parameter has its real name.
 
 Physics values are read at runtime from `scripts\game\skater\physics.qb` inside `qb.pak.wpc`.
@@ -83,8 +88,8 @@ rail snapping and corner following, manual input window, grind type selection, t
 
 - Six areas load as one world, but nobody has ridden a tunnel end to end yet, so seams are unchecked.
   East LA, the Vans park and the Skate Ranch still need a teleport from their tunnels.
-- Props that the game places from the node array sit in a pile at the origin (in Hollywood, at 0,0,0)
-  because level objects are not positioned yet. The two ends of a tunnel are different geometry, so the offset cannot be read off them. A kill plane resets you if you leave the map.
+- Pieces that scripts create or kill later (story changes, breakables) stay in their level-start
+  state. The two ends of a tunnel are different geometry, so the offset cannot be read off them. A kill plane resets you if you leave the map.
 - Some distant surfaces in Skate Ranch render as black-and-white streaks (probably multi-pass or
   alpha materials I treat as plain).
 - No skybox, no animated or multi-pass materials, no level objects, no translucency sorting.
