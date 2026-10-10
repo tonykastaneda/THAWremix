@@ -73,6 +73,8 @@ rail snapping and corner following, manual input window, grind type selection, t
 - **grind**: 6.4 s on the Capitol Records rail chain round a corner, flies off the end, lands, banks 866.
 - **vert**: rides up a vert face, Indy in vert air, lands on the same face, reverts into a nose manual
   with the combo still open.
+- **lip**: vert air, grind button on the way down stalls on the coping for 1.5 s on the lip balance
+  meter, drops back in, lands, banks 576.
 - **wall**: glancing airborne approach to a wall-ridable face, wallride, ollie off, land, combo banked.
 
 `--screenshot <png>` runs a short scripted session in the window and saves a frame.
@@ -81,9 +83,12 @@ rail snapping and corner following, manual input window, grind type selection, t
 
 - Riding through a tunnel does not swap to the next area yet (each area has its own origin, so this
   needs a teleport between the two ends of the tunnel). A kill plane resets you if you leave the map.
+- Some distant surfaces in Skate Ranch render as black-and-white streaks (probably multi-pass or
+  alpha materials I treat as plain).
 - No skybox, no animated or multi-pass materials, no level objects, no translucency sorting.
 - No skater model or animation: a capsule on a board.
-- No lip tricks, wallplants, spine transfers, acid drops, walking, BMX, or special tricks.
+- Lip tricks are one generic stall ("Lip Trick", 400 points, my numbers); the real ones are in
+  `liptricks.qb`. No wallplants, spine transfers, acid drops, walking, BMX, or special tricks.
 - Nobody has played it by hand yet: the scenarios check that mechanics work, not that they feel right.
 - Level objects with their own collision (`data\models\*.col.wpc`) are not placed.
 - Script bytecode is not run, so triggers, gaps and goals do nothing.
