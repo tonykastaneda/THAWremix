@@ -43,6 +43,9 @@ Formats (readers in `tools/*.py` and `thaw-bevy/src/formats`):
   position.
 - **`dbg.pak.wpc`** holds 139,692 hash-to-name pairs, which is why every parameter has its real name.
 
+Manual triggers come from `manualtricks.qb`: up then down (or down then up for a nose manual)
+within 400 ms, valid for 700 ms before landing; from rolling, within 220 ms.
+
 Physics values are read at runtime from `scripts\game\skater\physics.qb` inside `qb.pak.wpc`.
 Stat-driven values evaluate as `lo + (hi - lo) * stat * 0.1`.
 
@@ -67,7 +70,7 @@ Read out of the executable (function addresses in `reTHAWed.exe`):
 | Rail search | `0058cee0` | Nearest rail segment to the frame's movement segment, within `Rail_Max_Snap` |
 
 Reimplemented from the series' known behaviour, not yet checked against the executable: wall bounce, landing alignment and sideways bails, vert re-entry,
-rail corner following, manual input window, grind type selection, the revert window
+rail corner following, grind type selection, the revert window
 (0.3 s) and its 100 points, the wallride's 200 points and how it ends.
 
 ## THAW: verified results
@@ -95,8 +98,8 @@ rail corner following, manual input window, grind type selection, the revert win
   level-start state, which is mostly bare dirt: the park pieces arrive through the story.
 - The sky is `default_sky` for every area. No animated or multi-pass materials, no level objects, no translucency sorting.
 - No skater model or animation: a capsule on a board.
-- Lip tricks use four of the game's definitions (Invert, Axle Stall, Rock to Fakie, Blunt to Fakie)
-  with their real scores; which direction picks which is my mapping. No wallplants, spine transfers, acid drops, walking, BMX, or special tricks.
+- Trick slots follow the game's default mapping in `protricks.qb` (16 air tricks with diagonals,
+  8 lip tricks) with real names and scores; double-tap and special tricks are not in. No wallplants, spine transfers, acid drops, walking, BMX, or special tricks.
 - Nobody has played it by hand yet: the scenarios check that mechanics work, not that they feel right.
 - Level objects with their own collision (`data\models\*.col.wpc`) are not placed.
 - Script bytecode is not run, so triggers, gaps and goals do nothing.
