@@ -90,8 +90,8 @@ rail snapping and corner following, manual input window, grind type selection, t
   East LA, the Vans park and the Skate Ranch still need a teleport from their tunnels.
 - Pieces that scripts create or kill later (story changes, breakables) stay in their level-start
   state. The two ends of a tunnel are different geometry, so the offset cannot be read off them. A kill plane resets you if you leave the map.
-- Some distant surfaces in Skate Ranch render as black-and-white streaks (probably multi-pass or
-  alpha materials I treat as plain).
+- A few additive effects (light cones) render as solid shards. The Skate Ranch loads in its
+  level-start state, which is mostly bare dirt: the park pieces arrive through the story.
 - The sky is `default_sky` for every area. No animated or multi-pass materials, no level objects, no translucency sorting.
 - No skater model or animation: a capsule on a board.
 - Lip tricks are one generic stall ("Lip Trick", 400 points, my numbers); the real ones are in
