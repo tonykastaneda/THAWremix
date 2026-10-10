@@ -79,7 +79,7 @@ rail snapping and corner following, manual input window, grind type selection, t
 - **vert**: rides up a vert face, Indy in vert air, lands on the same face, reverts into a nose manual
   with the combo still open.
 - **lip**: vert air, grind button on the way down stalls on the coping for 1.5 s on the lip balance
-  meter, drops back in, lands, banks 576.
+  meter (Invert, 500), drops back in, lands, banks 676.
 - **wall**: glancing airborne approach to a wall-ridable face, wallride, ollie off, land, combo banked.
 
 `--screenshot <png>` runs a short scripted session in the window and saves a frame.
@@ -94,8 +94,8 @@ rail snapping and corner following, manual input window, grind type selection, t
   level-start state, which is mostly bare dirt: the park pieces arrive through the story.
 - The sky is `default_sky` for every area. No animated or multi-pass materials, no level objects, no translucency sorting.
 - No skater model or animation: a capsule on a board.
-- Lip tricks are one generic stall ("Lip Trick", 400 points, my numbers); the real ones are in
-  `liptricks.qb`. No wallplants, spine transfers, acid drops, walking, BMX, or special tricks.
+- Lip tricks use four of the game's definitions (Invert, Axle Stall, Rock to Fakie, Blunt to Fakie)
+  with their real scores; which direction picks which is my mapping. No wallplants, spine transfers, acid drops, walking, BMX, or special tricks.
 - Nobody has played it by hand yet: the scenarios check that mechanics work, not that they feel right.
 - Level objects with their own collision (`data\models\*.col.wpc`) are not placed.
 - Script bytecode is not run, so triggers, gaps and goals do nothing.
