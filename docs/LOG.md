@@ -92,7 +92,7 @@ rail snapping and corner following, manual input window, grind type selection, t
   state. The two ends of a tunnel are different geometry, so the offset cannot be read off them. A kill plane resets you if you leave the map.
 - Some distant surfaces in Skate Ranch render as black-and-white streaks (probably multi-pass or
   alpha materials I treat as plain).
-- No skybox, no animated or multi-pass materials, no level objects, no translucency sorting.
+- The sky is `default_sky` for every area. No animated or multi-pass materials, no level objects, no translucency sorting.
 - No skater model or animation: a capsule on a board.
 - Lip tricks are one generic stall ("Lip Trick", 400 points, my numbers); the real ones are in
   `liptricks.qb`. No wallplants, spine transfers, acid drops, walking, BMX, or special tricks.
