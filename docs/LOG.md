@@ -56,10 +56,13 @@ Read out of the executable (function addresses in `reTHAWed.exe`):
 | Air gravity | `005c8df0` | `Physics_Air_Gravity / hang stat` (vert uses the vert hang stat) |
 | Ollie | `005dddc0` | Speed lerps minâ†’max over `Skater_max_tense_time`; added to world +Y |
 | Balance meter | `00587970` | Instability grows with time; lean accelerates; random drift when no input |
+| Trick value | `0056a3e0`, `0056c0c0` | `base × spin/2 × repeat%`; spin factors 2,3,4,5,6,7 per 180°; repeats 100/75/50/25/10 %; switch +20 % |
+| Ground stick | `005d4ef0` | Leaves the ground on a convex edge sharper than `Ground_stick_angle` unless the drop is small (structure matches mine; not ported line by line) |
+| Wallride entry | `005d6f00` | Grind button within its window, `Wall_Ride_Delay` since the last one, min speed, max incident angle |
 
-Reimplemented from the series' known behaviour, not yet checked against the executable: ground
-snapping and the stick angle rule, wall bounce, landing alignment and sideways bails, vert re-entry,
-rail snapping and corner following, manual input window, grind type selection, combo scoring rules.
+Reimplemented from the series' known behaviour, not yet checked against the executable: wall bounce, landing alignment and sideways bails, vert re-entry,
+rail snapping and corner following, manual input window, grind type selection, the revert window
+(0.3 s) and its 100 points, the wallride's 200 points and how it ends.
 
 ## THAW: verified results
 
@@ -68,7 +71,9 @@ rail snapping and corner following, manual input window, grind type selection, c
 - **roll**: spawns at "P1: Restart", settles at 454 in/s on the flat (kick speed limit is 445),
   ollie peaks 72.7 in (432 in/s at âˆ’1350 in/sÂ² predicts 69), kickflip scores 100.
 - **grind**: 6.4 s on the Capitol Records rail chain round a corner, flies off the end, lands, banks 866.
-- **vert**: rides up a vert face, leaves in vert air, comes back down onto the same face.
+- **vert**: rides up a vert face, Indy in vert air, lands on the same face, reverts into a nose manual
+  with the combo still open.
+- **wall**: glancing airborne approach to a wall-ridable face, wallride, ollie off, land, combo banked.
 
 `--screenshot <png>` runs a short scripted session in the window and saves a frame.
 
@@ -78,7 +83,8 @@ rail snapping and corner following, manual input window, grind type selection, c
   needs a teleport between the two ends of the tunnel). A kill plane resets you if you leave the map.
 - No skybox, no animated or multi-pass materials, no level objects, no translucency sorting.
 - No skater model or animation: a capsule on a board.
-- No lip tricks, wallrides, wallplants, reverts, spine transfers, walking, or special tricks.
+- No lip tricks, wallplants, spine transfers, acid drops, walking, BMX, or special tricks.
+- Nobody has played it by hand yet: the scenarios check that mechanics work, not that they feel right.
 - Level objects with their own collision (`data\models\*.col.wpc`) are not placed.
 - Script bytecode is not run, so triggers, gaps and goals do nothing.
 
