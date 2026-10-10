@@ -50,8 +50,9 @@ Manual triggers come from `manualtricks.qb`: up then down (or down then up for a
 within 400 ms, valid for 700 ms before landing; from rolling, within 220 ms.
 
 Grind base scores sit inside script bytecode in `grindscripts.qb`: 50-50, Nosegrind and 5-0 are 100,
-Crooked, Overcrook and Smith 125, Tailslide and Noseslide 150, Boardslide and Lipslide 200. The game
-prefixes FS or BS by approach side; I do not yet.
+Crooked, Overcrook and Smith 125, Tailslide and Noseslide 150, Boardslide and Lipslide 200. Eight of these
+are triggered, named FS or BS by which side the rail is on; which stick direction gives which grind
+is the series convention, not read from the game.
 
 Physics values are read at runtime from `scripts\game\skater\physics.qb` inside `qb.pak.wpc`.
 Stat-driven values evaluate as `lo + (hi - lo) * stat * 0.1`.
@@ -77,7 +78,7 @@ Read out of the executable (function addresses in `reTHAWed.exe`):
 | Rail search | `0058cee0` | Nearest rail segment to the frame's movement segment, within `Rail_Max_Snap` |
 
 Reimplemented from the series' known behaviour, not yet checked against the executable: wall bounce, landing alignment and sideways bails, vert re-entry,
-rail corner following, grind type selection, the revert window
+rail corner following, grind type selection and FS/BS side, the revert window
 (0.3 s) and its 100 points, the wallride's 200 points and how it ends.
 
 ## THAW: verified results
