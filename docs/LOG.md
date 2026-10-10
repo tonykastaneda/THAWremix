@@ -64,9 +64,10 @@ Read out of the executable (function addresses in `reTHAWed.exe`):
 | Trick value | `0056a3e0`, `0056c0c0` | `base × spin/2 × repeat%`; spin factors 2,3,4,5,6,7 per 180°; repeats 100/75/50/25/10 %; switch +20 % |
 | Ground stick | `005d4ef0` | Leaves the ground on a convex edge sharper than `Ground_stick_angle` unless the drop is small (structure matches mine; not ported line by line) |
 | Wallride entry | `005d6f00` | Grind button within its window, `Wall_Ride_Delay` since the last one, min speed, max incident angle |
+| Rail search | `0058cee0` | Nearest rail segment to the frame's movement segment, within `Rail_Max_Snap` |
 
 Reimplemented from the series' known behaviour, not yet checked against the executable: wall bounce, landing alignment and sideways bails, vert re-entry,
-rail snapping and corner following, manual input window, grind type selection, the revert window
+rail corner following, manual input window, grind type selection, the revert window
 (0.3 s) and its 100 points, the wallride's 200 points and how it ends.
 
 ## THAW: verified results
