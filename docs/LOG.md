@@ -99,6 +99,10 @@ others did 11 to 40 times, mostly by launching off ramps at the map edge.
 
 - Six areas load as one world, but nobody has ridden a tunnel end to end yet, so seams are unchecked.
   East LA, the Vans park and the Skate Ranch still need a teleport from their tunnels.
+- Objects built from separate model files (`data\models`, 723 of them: doors, shop interiors, props
+  with their own collision) are not loaded. Example: the Roosevelt hotel entrance in Hollywood has
+  no floor or wall in any level collision. Rolling toward a bottomless gap now bounces you back as
+  if it were a wall; jumping into one still falls to the kill plane.
 - Pieces that scripts create or kill later (story changes, breakables) stay in their level-start
   state. The two ends of a tunnel are different geometry, so the offset cannot be read off them. A kill plane resets you if you leave the map.
 - A few additive effects (light cones, spotlight beams) render as solid shards.
