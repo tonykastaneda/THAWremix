@@ -337,3 +337,15 @@ Learned on the way:
 Testing aids (environment variables for `hostory.py`): `HW_SPAWN="x y z yaw"` moves the level's other
 restarts to one spot; `HW_DEBUG=1` adds an on-screen position readout and messages from the goal
 helper scripts.
+
+New story: Remix's chapter 1 opens with the training intro cutscenes (TR_1A-1C), which play inside
+the training level; with Hollywood in that slot the first one hung the game (stock data plays them
+fine). `hostory.py` now drops chapter 1's cutscene list from `chapter_info.qb` (loose and in
+`pre\qb_scripts.pre`, built on top of the HUD port's copy via `HW_QB_BASE`). "Start New Story Mode"
+then plays the chapter intro camera text and drops into Hollywood with the Hollywood goals listed.
+
+Goal peds: with "Continue Story Mode" only the caveman goal's ped appeared; the save holds per-goal
+state keyed by goal id, and the new ids are not in it. The moved ped nodes are now `CreatedAtStart`,
+and all six exist in game (checked with `ObjectExists`); talking to the non-caveman ones has not been
+tested yet. Testing aids added: `HW_UNLOCK_ALL=1` (no `Unlocked_By_Another`), `HW_NOPOS=1`, and with
+`HW_SPAWN` the debug build teleports the skater there 1.5 s after load.

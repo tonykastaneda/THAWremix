@@ -197,6 +197,9 @@ def main():
         nm = qb2.get(n, qbkey('Name'))
         if nm and nm[1] in want:
             pos, yaw = places[want[nm[1]]]
+            # goal peds other than the caveman's are not spawned for these goals; create them at start
+            if want[nm[1]].endswith('_Pro') and (None, ('name', qbkey('CreatedAtStart'))) not in n[1]:
+                n[1].append((None, ('name', qbkey('CreatedAtStart'))))
             for i, (k, v) in enumerate(n[1]):
                 if k == qbkey('Pos'):
                     n[1][i] = (k, ('vec', tuple(map(float, pos))))
@@ -243,7 +246,7 @@ def main():
              ('skater', N('Custom')), ('Pro', S(who)), ('full_name', S(who)),
              ('Trigger_Obj_ID', N(pro_node)), ('restart_node', N(restart_node)),
              ('start_cam_anims', cam_to(pos, yaw))]
-        if not first:
+        if not first and not os.environ.get('HW_UNLOCK_ALL'):  # testing aid: every goal open at once
             f.append(FLAG('Unlocked_By_Another'))
         if child:
             f.append(('child', N(G[child])))
@@ -316,6 +319,25 @@ def main():
                                 ['repeat']]),
         script('hw_cave_stop', [['skater', ':', 'Obj_KillSpawnedScript', 'Name', '=', 'hw_cave_poll']]),
         # testing aid: the skater's position on screen twice a second
+        script('hw_debug_teleport', [['wait', 90, 'gameframes'],
+                                     ['skater', ':', 'Obj_SetPosition', 'position', '=', bytes([qb2.VEC]) + struct.pack('<3f', *map(float, os.environ.get('HW_SPAWN', '0 0 0 0').split()[:3]))],
+                                     ['skater', ':', 'Obj_SetOrientation', 'y', '=', bytes([qb2.FLOAT]) + struct.pack('<f', float(os.environ.get('HW_SPAWN', '0 0 0 0').split()[3]) * 57.29578)],
+                                     ['skater', ':', 'SetSpeed', 0],
+                                     ['wait', 2, 'gameframes'],
+                                     ['skater', ':', 'SetSpeed', 0]]),
+        script('hw_debug_peds', [['wait', 150, 'gameframes'], ['<hw_peds>', '=', "'peds:"],
+                                 ['if', 'ObjectExists', 'id', '=', 'TRG_G_COUNTER7_Pro'], ['FormatText', 'TextName', '=', 'hw_peds', "'%a 0", 'a', '=', '<hw_peds>'], ['endif'],
+                                 ['if', 'ObjectExists', 'id', '=', 'TRG_G_GAP16_Pro'], ['FormatText', 'TextName', '=', 'hw_peds', "'%a 1", 'a', '=', '<hw_peds>'], ['endif'],
+                                 ['if', 'ObjectExists', 'id', '=', 'TRG_G_GAP17_Pro'], ['FormatText', 'TextName', '=', 'hw_peds', "'%a 2", 'a', '=', '<hw_peds>'], ['endif'],
+                                 ['if', 'ObjectExists', 'id', '=', 'TRG_G_COUNTER4_Pro'], ['FormatText', 'TextName', '=', 'hw_peds', "'%a 3", 'a', '=', '<hw_peds>'], ['endif'],
+                                 ['if', 'ObjectExists', 'id', '=', 'TRG_G_GAP5_Pro'], ['FormatText', 'TextName', '=', 'hw_peds', "'%a 4", 'a', '=', '<hw_peds>'], ['endif'],
+                                 ['if', 'ObjectExists', 'id', '=', 'TRG_G_GAP20_Pro'], ['FormatText', 'TextName', '=', 'hw_peds', "'%a 5", 'a', '=', '<hw_peds>'], ['endif'],
+                                 ['create_panel_message', 'id', '=', 'hw_dbg3', 'text', '=', '<hw_peds>'],
+                                 ['wait', 60, 'gameframes'],
+                                 ['TRG_G_GAP16_Pro', ':', 'Obj_GetPosition'],
+                                 ['FormatText', 'TextName', '=', 'hw_pos_text', "'gap16 %a %b %c",
+                                  'a', '=', dot('Pos', (1, 0, 0)), 'b', '=', dot('Pos', (0, 1, 0)), 'c', '=', dot('Pos', (0, 0, 1))],
+                                 ['create_panel_message', 'id', '=', 'hw_dbg3', 'text', '=', '<hw_pos_text>']]),
         script('hw_debug_pos', [['while'],
                                 ['skater', ':', 'Obj_GetPosition'],
                                 ['FormatText', 'TextName', '=', 'hw_pos_text', "'%a %b %c",
@@ -351,7 +373,10 @@ def main():
         s, e = sc[slot]
         lines = []
         if os.environ.get('HW_DEBUG') and slot == spare[0]:
-            lines = [['spawnscript', 'hw_debug_pos']]
+            lines = [] if os.environ.get('HW_NOPOS') else [['spawnscript', 'hw_debug_pos']]
+            if os.environ.get('HW_SPAWN'):
+                lines.append(['spawnscript', 'hw_debug_teleport'])
+            lines.append(['spawnscript', 'hw_debug_peds'])
         edits.append((s, e, script(slot, lines)[:-1]))
     new = bytearray()
     pos = 0
@@ -369,6 +394,24 @@ def main():
     list(qb2.tokens(bytes(new)))  # must tokenise end to end
     open(os.path.join(out, 'tr_scripts.qb'), 'wb').write(new)
     print(f'tr_scripts.qb {len(d)} -> {len(new)} bytes')
+
+    # chapter 1 starts with Remix's training intro cutscenes (TR_1A-1C), played in the training
+    # level; with Hollywood in that slot the first one hangs, and they are not Hollywood's story
+    ch = open(os.path.join(data, 'scripts', 'game', 'menu', 'chapter_info.qb'), 'rb').read()
+    p = qb2.find_item(ch, 0x1887ba3d)  # the chapter array
+    chapters, cend = qb2.parse_value(ch, p)
+    while ch[p] in (qb2.NEWLINE, 0x02):
+        p += 1
+    ch1 = chapters[1][0][1]
+    ch1[:] = [(k, v) for k, v in ch1 if k != 0x84546ab7]  # chapter 1's cutscene list
+    ch = ch[:p] + qb2.encode_value(chapters) + ch[cend:]
+    list(qb2.tokens(ch))
+    open(os.path.join(out, 'chapter_info.qb'), 'wb').write(ch)
+    # build on the HUD port's qb_scripts.pre when there is one, so both changes survive
+    base = os.environ.get('HW_QB_BASE') or os.path.join(data, 'pre', 'qb_scripts.pre')
+    qb2.replace_in_pre(base, os.path.join(out, 'qb_scripts.pre'),
+                       r'scripts\game\menu\chapter_info.qb', ch)
+    print(f'chapter_info.qb: chapter 1 intro cutscenes removed')
 
     pre = os.path.join(out, 'tr_scripts.pre')
     qb2.replace_in_pre(os.path.join(data, 'pre', 'tr_scripts.pre'), pre, r'levels\TR\TR_scripts.qb', bytes(new))
