@@ -21,20 +21,27 @@ def fmt(t, pl):
     if t == 0x17:
         return str(struct.unpack_from('<i', pl)[0])
     if t == 0x1A:
-        return '%g' % struct.unpack_from('<f', pl)[0]
+        s = '%g' % struct.unpack_from('<f', pl)[0]
+        return s if any(c in s for c in '.en') else s + '.0'  # a float stays a float
     if t == 0x1F:
         return '(%g, %g)' % struct.unpack_from('<2f', pl)
     if t == 0x1E:
         return '(%g, %g, %g)' % struct.unpack_from('<3f', pl)
     if t in (0x1B, 0x1C):
-        return repr(pl[4:-1].decode('latin-1'))
+        # "string" (0x1B) and 'local string' (0x1C), escaped the way tools/qbc.py reads them
+        q = '"' if t == 0x1B else "'"
+        s = pl[4:-1].decode('latin-1').replace('\\', '\\\\').replace(q, '\\' + q)
+        return q + ''.join(c if 32 <= ord(c) < 127 else '\\x%02x' % ord(c) for c in s) + q
     return OPS.get(t, '#%02x' % t)
 
 
 def text(code):
     out = []
+    prev = None
     for p, t, pl in qb2.tokens(code):
-        out.append(fmt(t, pl))
+        if not (t == 0x49 and prev in (0x3E, 0x3F)):  # case/default's own jump is implied
+            out.append(fmt(t, pl))
+        prev = t
     return ' '.join(out).replace(' \n ', '\n')
 
 

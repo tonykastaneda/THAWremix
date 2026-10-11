@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 import qb  # noqa: E402
 import qb2  # noqa: E402
 from pak import qbkey  # noqa: E402
-from thawqbdump import fmt  # noqa: E402
+from thawqbdump import text  # noqa: E402
 
 
 def key(name):
@@ -32,7 +32,7 @@ def scripts(d):
 
 def show(d, k):
     s, e = scripts(d)[k]
-    return ' '.join(fmt(t, pl) for p, t, pl in qb2.tokens(d, s, e)).replace(' \n ', '\n')
+    return text(d[s:e])
 
 
 if __name__ == '__main__':

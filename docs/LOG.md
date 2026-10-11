@@ -481,3 +481,34 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   Triangle there opens CAS with that shop behind the skater; Back returns to Hollywood with the goal
   won; the main menu looks as stock.
 - `tools/ppsspp_ws.py` retries calls while the emulated CPU is starting ('CPU not started').
+
+### THAW main menu and menu look (UI phase 1)
+
+- `tools/qbc.py`: a QB text compiler for the syntax the dump tools print (scripts with default
+  params, globals, if/else, while/repeat, switch/case/default with their 0x49 jumps, "string" 0x1B
+  vs 'local string' 0x1C). It rebuilds 469 of Remix's 478 main-menu-pre scripts byte for byte; the
+  other 9 use random tokens (#2f), not supported. The dump printers now keep the string types apart
+  and print floats with a point. `tools/thaw2q.py` turns THAW scripts into that source (THAW keeps
+  default params as a struct at the head of the body; its bodies already end in endscript).
+- THAW's main menu (`z_mainmenu_scripts`, `create_base_main_menu`) is a label menu: tilted strips
+  built from `roundbar_tip_left` / `roundbar_middle` / `roundbar_tip_right` (31 px segments) with the
+  text on top. Its scripts (`scripts\mainmenu\labelmenu.qb`) port to Remix with two changes:
+  `exclusive_device` dropped, and `current_menu` holds the alignment tag (Remix has no GetParentID).
+  They go into `scripts\game\menu\gamemenu_helpers.qb` (always loaded).
+- `tools/ui/mainmenu.q` replaces Remix's `create_main_menu`. It keeps Remix's setup and every
+  item's handler (`main_menu_exit` with `no_spin_animation`), in THAW's order and wording, with
+  Remix's Horse in THAW's 2-Player slot and WiFi Play in Online Play's. The Wheel of Loogies is
+  level geometry (`wol_pie_*`, `wol_lightbulb_*`), hidden with `0x0a167145 On = 0`.
+- Sprites: Remix's menus use THUG2's image names, which THAW redrew (WDT is THUG2's World
+  Destruction Tour; THAW's `WDT_logo_big` is the American Wasteland logo). 103 main menu sprites
+  and the menu's panel sprites (`roundbar_*`, `snaz_*` dialog boxes, `options_bg`, arrows) are
+  THAW's now, at Remix's palette depths.
+- Theme colours: Remix highlights menu text in black at 118 alpha (`DE_HIGHLIGHTED_TEXT_COLOR_NEW`),
+  which vanishes on THAW's dark strips. THAW's pink (123, 4, 93), its white, its dark highlight bar
+  and its white pause bar are ported.
+- The main menu room's sign (`mainmenu.psp_level` texture 61, 256x128, upside down, with 3 mip
+  levels) now carries THAW's logo from its own main menu zone (`z_mainmenu` texture 72).
+  `tools/psptex.py` lists, exports and rewrites level textures in place; mip levels must be
+  rewritten too, or their old indices read the new palette as noise.
+- A stray top-level word in a .qb (from a doubled endscript) hangs Remix at the main menu's loading
+  screen; qbc now refuses top-level words that are not `name = value`.
