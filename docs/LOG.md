@@ -583,3 +583,24 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   name comes from the load list. New entries have no loose copy (not in datap).
 - Verified: the map shows left of the pause list; at Remix (-1411, -1756) the arrow sits where the
   formula puts it (about 11 px left of and 12 px below the map centre).
+
+### Building a PSP ISO
+
+- `tools/mkumd.py` builds a UMD-style ISO9660 image from the unpacked tree (`extracted/remix_psp`).
+  It matches the shipped Remix image: system and application id "PSP GAME", blank volume id,
+  plain names (no `;1`), every file on a 16-sector (32 KB) boundary, and (with `--like`) the
+  original's file order and PVD date. Files missing from the tree (ICON1.PMF and SND0.AT3, dropped
+  for the save icon work) are left out.
+- `--compact-wad` repacks `datap.hed/.wad` into a temp copy first. `hed.py replace` appends files
+  that outgrow their slot, so the test tree's wad had grown to 794 MB with stale copies; packed it is
+  595 MB (12,918 files for 12,922 index entries, 2048-aligned, in index order). Only offsets in the
+  index change.
+- Build: `python tools/mkumd.py extracted/remix_psp "work/iso/THX Hollywood.iso" --like
+  "THAWremix/Tony Hawk's Underground 2 Remix (USA).iso" --compact-wad PSP_GAME/USRDIR/datap`
+  (1.24 GB, 8 s). Verified: 7-Zip lists the 48 files; every file and all 12,922 archive entries are
+  byte-identical to the tree; PPSSPP boots the ISO to the main menu, story mode in Hollywood and the
+  pause menu.
+- Performance at 333 MHz in PPSSPP (gpu.stats.get, 16 views each): stock `sz` (Remix's largest
+  level) 6.2k draws and 60k vertices per frame typical, 21k / 173k peak; Hollywood 10.2k / 133k
+  typical, 20.4k / 357k peak. Both hold 30 fps in PPSSPP, which does not time the GE; Hollywood
+  asks about twice stock's vertex load.
