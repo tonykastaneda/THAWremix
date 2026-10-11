@@ -40,6 +40,24 @@ MENU_PANEL_SPRITES = ['roundbar', 'roundbar_highlight', 'roundbar_middle', 'roun
 THEME_COLOURS = ['DE_HIGHLIGHTED_TEXT_COLOR_NEW', 'DE_UNHIGHLIGHTED_TEXT_COLOR_NEW', 'DE_HIGHLIGHT_BAR_COLOR',
                  'DE_PAUSEBAR_COLOR']
 UI = os.path.join(os.path.dirname(__file__), 'ui')
+# submenus that show their own view of THAW's alley (tools/casbackdrop.py SUB_PANELS): a call added
+# at the end of each, after the menu has set its own camera
+SUBMENU_VIEWS = {
+    'levels\\mainmenu\\mainmenu_scripts.qb': [('create_gamemode_options_menu', 'hw_menu_view bg = 0x3fb50e2f'),
+                                              ('create_createamodes_menu', 'hw_menu_view bg = 0x3fa471cf')],
+    'levels\\mainmenu\\mainmenu_options.qb': [('create_setup_options_menu', 'hw_menu_view bg = 0x45ab5a86')],
+}
+
+
+def append_call(d, script_name, line):
+    """A compiled .qb with `line` (qbc source) run at the end of script_name."""
+    import qbscripts
+    s, e = qbscripts.scripts(d)[qbscripts.key(script_name)]
+    assert d[e - 1] == 0x24
+    body = qbc.compile_source(f'script hw_tmp\n{line}\nendscript\n')[qbscripts.key('hw_tmp')][1]
+    stmt = body[6:-2]  # past 0x23 and the name, up to the closing 0x24 and newline
+    return d[:e - 1] + stmt + d[e - 1:]
+
 
 
 def convert_sprite(thaw_path, stock):
@@ -121,7 +139,9 @@ def main():
         files = {n.lower(): (n, d) for n, k, d in qb2.read_pre(src_pre)[3]}
         name, d = files[entry.lower()]
         code = qbc.compile_source(''.join(open(os.path.join(UI, s), encoding='utf-8').read() + '\n' for s in sources))
-        new = qbc.patch(d, code)
+        new = qbc.patch(d, code) if code else d
+        for script_name, line in SUBMENU_VIEWS.get(entry.lower(), []):
+            new = append_call(new, script_name, line)
         qb2.replace_in_pre(src_pre, dst_pre, name, new)
         loose['\\' + name] = new
         print(f'{entry}: {len(code)} scripts, {len(d)} -> {len(new)} bytes')
@@ -151,6 +171,8 @@ def main():
         print('mainmenu.psp_level: main menu sign is THAW\'s logo')
     patch_pre(a.mainmenu_scripts or pre('mainmenu_scripts.pre'), os.path.join(a.out, 'mainmenu_scripts.pre'),
               'levels\\mainmenu\\mainmenu_scripts.qb', ['mainmenu.q'])
+    patch_pre(os.path.join(a.out, 'mainmenu_scripts.pre'), os.path.join(a.out, 'mainmenu_scripts.pre'),
+              'levels\\mainmenu\\mainmenu_options.qb', [])
 
     with open(os.path.join(a.out, 'loose', 'index.txt'), 'w') as idx:
         for path, data in loose.items():

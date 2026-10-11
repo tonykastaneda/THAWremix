@@ -109,10 +109,14 @@ wait 5 gameframe
 kill_start_key_binding
 endscript
 
-; the camera the alley panel is built for (casbackdrop.cas_camera), the panel back if CAS killed it,
-; and the skater out of sight
-script hw_main_menu_view
-create Name = 0xc6ed5a77
+; the camera the alley panels are built for (casbackdrop.cas_camera) with one panel showing:
+; bg is its host box (casbackdrop.MENU_HOST / SUB_PANELS). The skater is kept out of sight.
+script hw_menu_view bg = 0xc6ed5a77
+Kill Name = 0xc6ed5a77
+Kill Name = 0x3fb50e2f
+Kill Name = 0x3fa471cf
+Kill Name = 0x45ab5a86
+create Name = <> bg
 skater : hide
 KillSkaterCamAnim ALL
 SetActiveCamera id = skatercam0
@@ -125,4 +129,8 @@ play_hold
 frames = 1
 virtual_cam
 }
+endscript
+
+script hw_main_menu_view
+hw_menu_view bg = 0xc6ed5a77
 endscript

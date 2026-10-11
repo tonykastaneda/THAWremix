@@ -190,14 +190,25 @@ BD_HOST = {'barber': 0x978F60B1, 'clothing': 0xE0885027}
 MENU_HOST = 0xC6ED5A77
 MENU_HFOV = 72.0
 THAW_MENU_CAM = (np.array([42.6, 12.1, -983.8]), (0.000138, 0.999862, 0.011832))
+# the submenus' views of the alley (THAW's cam_story, cam_cam for Create-A-Modes, cam_options), each
+# on its own panel in the same place; the menus kill all but theirs (hw_menu_view in
+# tools/ui/mainmenu.q). Hosts: the last room pieces the CAS camera never sees.
+SUB_PANELS = [
+    ('story', 0x3FB50E2F, (np.array([-170.7, 12.9, -990.3]), (0.0, -0.998885, 0.0))),
+    ('cam', 0x3FA471CF, (np.array([618.7, 12.9, -929.8]), (0.0, -0.998885, 0.0))),
+    ('options', 0x45AB5A86, (np.array([391.3, 36.6, -1033.8]), (-3.3e-05, -0.99987, 0.01597))),
+]
+MENU_HOSTS = [MENU_HOST] + [h for _, h, _ in SUB_PANELS]
 BD_SIZE = (512, 256)
 
 
-def thaw_menu_view(install):
-    """THAW's main menu backdrop, rendered from cam_main (its camera looks along +Z rotated by the
-    quaternion)."""
-    materials, meshes, textures, _, _ = thawscene.load_zone(install, 'z_mainmenu')
-    pos, (x, y, z) = THAW_MENU_CAM
+def thaw_menu_view(install, cam=THAW_MENU_CAM):
+    """A view of THAW's main menu zone from one of its menu cameras (Pos, quaternion x, y, z; the
+    camera looks along +Z rotated by the quaternion)."""
+    if not hasattr(thaw_menu_view, 'zone'):
+        thaw_menu_view.zone = thawscene.load_zone(install, 'z_mainmenu')
+    materials, meshes, textures, _, _ = thaw_menu_view.zone
+    pos, (x, y, z) = cam
     w = np.sqrt(max(0.0, 1 - x * x - y * y - z * z))
     q = np.array([x, y, z])
     t = 2 * np.cross(q, [0.0, 0, 1])
@@ -390,6 +401,10 @@ def main():
         # CAS's 88.18; the panel fills exactly that, close enough to sit in front of the room's walls
         mh = np.radians(MENU_HFOV)
         panels.append((MENU_HOST, img, backdrop_mesh(wall_d=20, floor=False, hfov=mh), mh))
+        for name, host, cam in SUB_PANELS:
+            sub = thaw_menu_view(install, cam)
+            sub.save(os.path.join(out, f'menu_{name}.png'))
+            panels.append((host, sub, backdrop_mesh(wall_d=20, floor=False, hfov=mh), mh))
         lvl = inject(os.path.join(data, 'levels', 'mainmenu', 'mainmenu.psp_level'), panels)
         open(os.path.join(out, 'mainmenu.psp_level'), 'wb').write(lvl)
         print('mainmenu.psp_level', len(lvl), 'bytes')
@@ -403,17 +418,18 @@ def main():
                 if qb2.get(n, qbkey('Class')) in (('name', qbkey('LevelObject')), ('name', qbkey('LevelGeometry')))
                 and qb2.get(n, qbkey('Name')) and qb2.get(n, qbkey('Name'))[1] != qbkey('Box01')
                 and (None, ('name', qbkey('CreatedAtStart'))) in n[1]]
-        assert all(h in room for h in list(BD_HOST.values()) + [MENU_HOST])
+        assert all(h in room for h in list(BD_HOST.values()) + MENU_HOSTS)
         # from CAS (init_cas_skater_and_cam passes cas) the main menu's panel goes; the main menu
         # creates it again (create_main_menu)
-        body = [['if', 'GotParam', 'cas'], ['Kill', 'Name', '=', tok_name(MENU_HOST)], ['endif']]
+        body = [['if', 'GotParam', 'cas']] + [['Kill', 'Name', '=', tok_name(h)] for h in MENU_HOSTS] + [['endif']]
         for v, shop in ((48, 'barber'), (49, 'clothing')):
             body += [['if', bytes([0x0E]), 'hw_shop_pending', '=', v, bytes([0x0F])]]
             body += [['Kill', 'Name', '=', tok_name(k)] for k in room if k != BD_HOST[shop]]
             body += [['endif']]
         # anywhere else (the main menu, CAS from the menus) neither backdrop shows
         body += [['if', bytes([0x0E]), 'hw_shop_pending', '=', 0, bytes([0x0F])]]
-        body += [['Kill', 'Name', '=', tok_name(k)] for k in BD_HOST.values()] + [['endif']]
+        # (and the submenus' alley panels, which sit with the main menu's: the menus show theirs)
+        body += [['Kill', 'Name', '=', tok_name(k)] for k in list(BD_HOST.values()) + MENU_HOSTS[1:]] + [['endif']]
         _, _, _, ents = qb2.read_pre(os.path.join(data, 'pre', 'mainmenu_scripts.pre'))
         cas = next(d for n, c, d in ents if n.lower() == r'levels\mainmenu\mainmenu_cas.qb')
         s, e = qbscripts.scripts(cas)[qbscripts.key('init_cas_skater_and_cam')]

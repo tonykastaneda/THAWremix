@@ -529,3 +529,21 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   kill it with the rest of the room. Verified: the main menu shows the alley with no skater;
   Create-A-Modes → CAS shows the normal room; Back returns to the alley; the barber trip still shows
   the barber shop.
+
+### Submenu backgrounds from THAW's alley
+
+- THAW moves its menu camera along the alley per screen (`main_menu_camera_control` states: main,
+  story, classic, cam, options, settings, skater, level, ...). Three of those views are rendered
+  (`SUB_PANELS` in `tools/casbackdrop.py`: `cam_story` for Story/Classic Mode Options, `cam_cam` for
+  Create-A-Modes, `cam_options` for Game Options) onto panels in the same place as the main menu's.
+- Each panel's host is a room piece hidden behind the shop backdrops; all six such pieces are now
+  used (two shops, the main menu, three submenus). More views would need another way to switch
+  textures.
+- `hw_menu_view bg = <host>` (tools/ui/mainmenu.q) kills all four menu panels, creates the one
+  given, hides the skater, and sets the fixed camera. `tools/thawui.py` appends that call to the end
+  of `create_gamemode_options_menu`, `create_createamodes_menu` and `create_setup_options_menu`,
+  after they set their own cameras. CAS kills all four; skater select and the other menus keep
+  Remix's room.
+- Verified: main menu, Story Mode Options, Create-A-Modes and Game Options each show their own
+  view, and Back returns to the main view. Skater select and CAS from Create-A-Modes show the room
+  with no panel in the way.
