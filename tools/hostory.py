@@ -49,8 +49,10 @@ PLACES = [
     ('TRG_G_GAP7_RestartNode', 'Z_HO_TRG_G_GAPS4_RESTARTNode'),  # red ropes lesson, facing the rope
     ('TRG_G_GAP16_Pro', ('Z_HO_TRG_G_Gaps31_RestartNode', (60, 0, 60))),  # Mindy at the skateshop
     ('TRG_G_GAP16_RestartNode', 'Z_HO_TRG_G_Gaps31_RestartNode'),
-    ('TRG_G_GAP17_Pro', 'Z_HO_TRG_G_GAP2_PRO'),  # Ben Whofleck
-    ('TRG_G_GAP17_RestartNode', ('Z_HO_TRG_G_GAP2_PRO', (-250, 0, 0))),
+    # Ben Whofleck: THAW puts him in a limo near the goal's own start node (Mindy gives the goal at
+    # the skateshop); his stand-in stands 300 in ahead of that start node (which faces +X), facing the skater
+    ('TRG_G_GAP17_Pro', ('Z_HO_TRG_G_Gap2_RestartNode', (300, 0, 0), 1.5708)),
+    ('TRG_G_GAP17_RestartNode', 'Z_HO_TRG_G_Gap2_RestartNode'),  # THAW's start, facing +X toward Ben
     ('TRG_G_COUNTER4_Pro', 'Z_HO_TRG_G_COUNTER4_PRO'),  # Duane, Dog and Cello
     ('TRG_G_COUNTER4_RestartNode', 'Z_HO_TRG_G_COUNTER4_RESTARTNode'),
     ('TRG_G_GAP5_Pro', ('Z_HO_TRG_G_Gaps5_RestartNode', (60, 0, 60))),  # the punk
@@ -211,9 +213,11 @@ def main():
     delta = np.round((AT - np.array(p1['Pos'])) * 16) / 16
 
     def thaw_place(src):
-        name, off = (src, (0, 0, 0)) if isinstance(src, str) else src
+        """A THAW node's shifted position and yaw; (node, offset) or (node, offset, yaw) override."""
+        name, off, yaw = (src, (0, 0, 0), None) if isinstance(src, str) else (tuple(src) + (None,))[:3]
         d = tnodes[qbkey(name)]
-        return np.array(d['Pos']) + delta + np.array(off), float(d.get('Angles', [0, 0, 0])[1])
+        return (np.array(d['Pos']) + delta + np.array(off),
+                float(d.get('Angles', [0, 0, 0])[1]) if yaw is None else yaw)
 
     places = {k: thaw_place(v) for k, v in PLACES}
 
@@ -343,20 +347,26 @@ def main():
                                 'TRG_G_GAP20_Pro', 'TRG_G_GAP20_RestartNode', child))
 
     helpers = b''.join(combo_watchers + [
-        # Ben: while the skater is within radius of him, any flip trick wins
-        script('hw_ben_start', [['TRG_G_GAP17_Pro', ':', 'Obj_SetInnerRadius', 150],
-                                ['TRG_G_GAP17_Pro', ':', 'Obj_SetOuterRadius', 170],
-                                ['TRG_G_GAP17_Pro', ':', 'Obj_SetException', 'ex', '=', 'ObjectInRadius', 'scr', '=', 'hw_ben_near']]),
-        script('hw_ben_near', [['skater', ':', 'Obj_SpawnScript', 'hw_ben_listen'],
-                               ['Obj_ClearExceptions'],
-                               ['Obj_SetException', 'ex', '=', 'ObjectOutOfRadius', 'scr', '=', 'hw_ben_far']]),
-        script('hw_ben_listen', [['SetEventHandler', 'ex', '=', 'SkaterEnterFlip', 'scr', '=', 'hw_ben_flip'], ['block']]),
-        script('hw_ben_far', [['skater', ':', 'Obj_KillSpawnedScript', 'Name', '=', 'hw_ben_listen'],
-                              ['Obj_ClearExceptions'],
-                              ['Obj_SetException', 'ex', '=', 'ObjectInRadius', 'scr', '=', 'hw_ben_near']]),
-        script('hw_ben_flip', [['GoalManager_SetGoalFlag', 'Name', '=', tok_name(G['gaps40']), 'got_1', 1]]),
-        script('hw_ben_stop', [['skater', ':', 'Obj_KillSpawnedScript', 'Name', '=', 'hw_ben_listen'],
-                               ['TRG_G_GAP17_Pro', ':', 'Obj_ClearExceptions']]),
+        # Ben: polled on the skater (event handlers for skater events never fired): while in a combo
+        # that has a Kickflip in it, being within 180 inches of Ben wins. Ben's position is fixed.
+        script('hw_ben_start', [['skater', ':', 'Obj_SpawnScript', 'hw_ben_poll']]),
+        script('hw_ben_poll', [['while'],
+                               ['if', 'SkaterCurrentScorePotGreaterThan', 0],
+                               ['GetNumberOfTrickOccurrences', 'TrickText', '=', "'Kickflip"],
+                               ['if', bytes([0x0E]), '<Number_Of_Occurrences>', bytes([0x14]), 0, bytes([0x0F])],
+                               ['Obj_GetPosition'],
+                               ['<hw_d>', '=', bytes([0x0E, 0x2D]) + tok_name('Pos') + bytes([0x0A, qb2.VEC])
+                                + struct.pack('<3f', *map(float, places['TRG_G_GAP17_Pro'][0])) + bytes([0x0F])],
+                               ['if', bytes([0x0E, 0x0E, 0x2D]) + tok_name('hw_d') + bytes([0x08, 0x2D]) + tok_name('hw_d')
+                                + bytes([0x0F, 0x12, qb2.INT]) + struct.pack('<i', 180 * 180) + bytes([0x0F])],
+                               ] + ([['create_panel_message', 'id', '=', 'hw_dbg7', 'text', '=', "'kickflip over Ben"]] if os.environ.get('HW_DEBUG') else []) + [
+                               ['GoalManager_SetGoalFlag', 'Name', '=', tok_name(G['gaps40']), 'got_1', 1],
+                               ['endif'],
+                               ['endif'],
+                               ['endif'],
+                               ['wait', 2, 'gameframes'],
+                               ['repeat']]),
+        script('hw_ben_stop', [['skater', ':', 'Obj_KillSpawnedScript', 'Name', '=', 'hw_ben_poll']]),
         event_counter('hw_revert', 'SkaterEnterRevert', G['counter40']),
         script('hw_dbg_watch', [['while'],
                                 ['<hw_st>', '=', "'goal: inactive"],
@@ -427,8 +437,8 @@ def main():
                                  ['if', 'ObjectExists', 'id', '=', 'TRG_G_GAP20_Pro'], ['FormatText', 'TextName', '=', 'hw_peds', "'%a 5", 'a', '=', '<hw_peds>'], ['endif'],
                                  ['create_panel_message', 'id', '=', 'hw_dbg3', 'text', '=', '<hw_peds>'],
                                  ['wait', 60, 'gameframes'],
-                                 ['TRG_G_GAP16_Pro', ':', 'Obj_GetPosition'],
-                                 ['FormatText', 'TextName', '=', 'hw_pos_text', "'gap16 %a %b %c",
+                                 ['TRG_G_GAP17_Pro', ':', 'Obj_GetPosition'],
+                                 ['FormatText', 'TextName', '=', 'hw_pos_text', "'ben %a %b %c",
                                   'a', '=', dot('Pos', (1, 0, 0)), 'b', '=', dot('Pos', (0, 1, 0)), 'c', '=', dot('Pos', (0, 0, 1))],
                                  ['create_panel_message', 'id', '=', 'hw_dbg3', 'text', '=', '<hw_pos_text>']]),
         script('hw_debug_pos', [['while'],
