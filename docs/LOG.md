@@ -286,3 +286,21 @@ ABADD00D texture record, stored bottom row first.
 
 Testing note: PPSSPP's Start is Space, not Enter (the pause menu only opens with Space).
 Balance Meters is On in the save's display options. The THAW meter shows mid-grind.
+
+### Props
+
+`build` now also places the zone's GameObject props (`--no-props` leaves them out): GameObjects
+present at level start whose `Type` has a model folder under `data\models\Props\<Type>` (the
+profile in `profile_levelobj.qb` points there). In Hollywood: 39 `Chair_Iron_01`, 13
+`Table_Iron_01`, 8 `barricade_01`, 7 `plant_big_01`. The `.mdl.wpc` parses as level geometry;
+meshes are rotated and placed at their node and get their own visibility boxes.
+
+Collision: each prop's `.col.wpc` object is rotated into place and appended to the level
+collision as a new object (`append_col_objects`): float vertices, small faces (8 bytes, so the
+one-byte-per-large-face block after the faces stays untouched), one BSP leaf holding every face.
+Every block grows at its end, so existing offsets stay valid; the leaf checker passes on all 976
+objects. Seen in game: chairs and table render under the arch at Hollywood & Highland.
+Collision against a prop has not been bumped into yet.
+
+Testing note: the training level's story spawn is not always "P1: Restart"; `work/exp_spawn.py`
+moves all 46 of its restart nodes to one spot. Yaw 0 faces -Z.

@@ -372,3 +372,80 @@ if __name__ == '__main__':
             h, w = textures[c][0].shape[:2]
             sizes[(w, h)] = sizes.get((w, h), 0) + 1
         print('texture sizes', sorted(sizes.items(), key=lambda kv: -kv[1])[:12])
+
+
+def read_col_objects(d, header=0x50):
+    """Collision objects of a v10 file as dicts: checksum, verts (n, 3) world, faces
+    [(flags, terrain, a, b, c)], tail (the last float of the record, copied as is)."""
+    ver, nobj, tverts, tlf, tsf, tlv, tsv, _ = struct.unpack_from('<8i', d, 0)
+    bv = (header + 0x40 * nobj + 15) & ~15
+    bi = bv + tlv * 12 + tsv * 6
+    bf = (bi + tverts + 3) & ~3
+    out = []
+    for i in range(nobj):
+        o = header + i * 0x40
+        cks, flags, nv, nf, small, fixed, ffo = struct.unpack_from('<IHHHBBI', d, o)
+        bmin = struct.unpack_from('<3f', d, o + 0x10)
+        fvo, bsp, into, tail = struct.unpack_from('<IIIf', d, o + 0x30)
+        if fixed:
+            v = np.array(struct.unpack_from(f'<{nv * 3}H', d, bv + fvo), np.float64).reshape(nv, 3) / 16 + bmin
+        else:
+            v = np.array(struct.unpack_from(f'<{nv * 3}f', d, bv + fvo), np.float64).reshape(nv, 3)
+        faces = []
+        for j in range(nf):
+            p = bf + ffo + j * (8 if small else 10)
+            if small:
+                ff, tt, a, b, c = struct.unpack_from('<HH3B', d, p)
+            else:
+                ff, tt, a, b, c = struct.unpack_from('<HH3H', d, p)
+            faces.append((ff, tt, a, b, c))
+        out.append(dict(checksum=cks, flags=flags, verts=v, faces=faces, tail=tail))
+    return out
+
+
+def load_props(install, zone):
+    """GameObjects present at level start whose type has a model under data/models/Props, placed at
+    their node. Returns (meshes, materials, textures, collision objects); each prop's meshes and
+    collision object carry the checksum of its node name."""
+    import glob
+    if not qb.NAMES:
+        qb.load_names(os.path.join(os.path.dirname(__file__), '..', 'extracted', 'dbg'))
+    entries, blob = open_pak(os.path.join(install, 'data', 'worlds', 'worldzones', zone, f'{zone}.pak.wpc'))
+    qbe = next(e for e in entries if (e['name'] or '').lower().endswith(f'\\{zone}.qb.wpc'))
+    tmp = os.path.join(os.environ.get('TEMP', '.'), f'{zone}_nodes.qb')
+    open(tmp, 'wb').write(blob[qbe['offset']:qbe['offset'] + qbe['size']])
+    nodes = expanded_nodes(tmp, zone)
+    flags = node_flags(install)
+    cache = {}
+    meshes, materials, textures, cols = [], {}, {}, []
+    for i, d in enumerate(nodes):
+        if d.get('Class') != '$GameObject' or not node_exists(d, flags) or 'Pos' not in d:
+            continue
+        t = str(d.get('Type', ''))[1:]
+        if t not in cache:
+            folder = os.path.join(install, 'data', 'models', 'Props', t)
+            files = {os.path.basename(p).lower(): p for p in glob.glob(os.path.join(folder, '*.wpc'))}
+            mdl, tex, col = (files.get(f'{t.lower()}.{x}.wpc') for x in ('mdl', 'tex', 'col'))
+            if not mdl:
+                cache[t] = None
+                continue
+            mats, ms = parse_geom(open(mdl, 'rb').read())
+            cache[t] = (mats, ms, parse_tex(open(tex, 'rb').read()) if tex else {},
+                        read_col_objects(open(col, 'rb').read()) if col else [])
+        if not cache[t]:
+            continue
+        mats, ms, texs, cobjs = cache[t]
+        materials.update(mats)
+        textures.update(texs)
+        name = _key(d['Name']) if isinstance(d.get('Name'), str) else qbkey(f'{zone}_prop_{i}')
+        r = euler_yxz(d.get('Angles', [0, 0, 0]))
+        pos = np.array(d['Pos'], np.float64)
+        for m in ms:
+            c = Mesh()
+            c.material, c.sector, c.radius, c.col, c.uv, c.strips = m.material, name, m.radius, m.col, m.uv, m.strips
+            c.pos = m.pos @ r.T + pos
+            c.center = tuple(np.array(m.center) @ r.T + pos)
+            meshes.append(c)
+        for k, o in enumerate(cobjs):
+            cols.append(dict(o, checksum=name if k == 0 else qbkey(f'{zone}_prop_{i}_{k}'), verts=o['verts'] @ r.T + pos))
+    return meshes, materials, textures, cols

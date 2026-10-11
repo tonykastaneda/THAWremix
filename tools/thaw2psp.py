@@ -467,6 +467,52 @@ def convert_col(d, delta16, disabled, moves=None):
     return bytes(out)
 
 
+def append_col_objects(d, objs):
+    """Remix v10 collision with extra objects appended: float vertices, small faces (so the
+    one-byte-per-large-face block after the faces is untouched) and a one-leaf BSP each. Every
+    block grows at its end, so existing objects' offsets stay valid. objs: dicts with checksum,
+    verts (n, 3) world, faces [(flags, terrain, a, b, c)], tail; at most 256 vertices each."""
+    H, OBJ = 0x20, 0x40
+    ver, nobj, tverts, tlf, tsf, tlv, tsv, pad = struct.unpack_from('<8i', d, 0)
+    bv = (H + OBJ * nobj + 15) & ~15
+    bi = bv + tlv * 12 + tsv * 6
+    bf = (bi + tverts + 3) & ~3
+    gap = bf + tlf * 10 + tsf * 8
+    ns = (gap + tlf + 3) & ~3
+    nb = struct.unpack_from('<i', d, ns)[0]
+    objects = bytearray(d[H:H + OBJ * nobj])
+    verts = bytearray(d[bv:bi])
+    inten = bytearray(d[bi:bi + tverts])
+    faces = bytearray(d[bf:gap])
+    large = bytes(d[gap:gap + tlf])
+    nodes = bytearray(d[ns + 4:ns + 4 + nb])
+    fidx = bytearray(d[ns + 4 + nb:])
+    for o in objs:
+        v = np.asarray(o['verts'], np.float64)
+        fs = [f for f in o['faces'] if max(f[2:]) < len(v)]
+        if len(v) > 256 or not fs:
+            continue
+        lo, hi = v.min(0), v.max(0)
+        objects += struct.pack('<IHHHBBI', o['checksum'], 0, len(v), len(fs), 1, 0, len(faces))
+        objects += struct.pack('<4f4f', *lo, 1.0, *hi, 1.0)
+        objects += struct.pack('<IIIf', len(verts), len(nodes), len(inten), o.get('tail', 0.0))
+        verts += v.astype('<f4').tobytes()
+        inten += bytes([0x80]) * len(v)
+        for ff, tt, a, b, c in fs:
+            faces += struct.pack('<HH4B', ff & ~0x40, tt, a, b, c, 0)
+        nodes += struct.pack('<BBHI', 3, 0, len(fs), len(fidx) // 2)
+        fidx += struct.pack(f'<{len(fs)}H', *range(len(fs)))
+        nobj += 1
+        tverts += len(v)
+        tlv += len(v)
+        tsf += len(fs)
+    out = bytearray(struct.pack('<8i', ver, nobj, tverts, tlf, tsf, tlv, tsv, pad)) + objects
+    out += bytes(-len(out) % 16) + verts + inten
+    out += bytes(-len(out) % 4) + faces + large
+    out += bytes(-len(out) % 4) + struct.pack('<i', len(nodes)) + nodes + fidx
+    return bytes(out)
+
+
 # ---------------------------------------------------------------- nodes
 
 def build_qb(target_qb, rails, delta, sink=-100000.0):
@@ -549,6 +595,7 @@ def main():
     ap.add_argument('--tex', type=int, default=64)
     ap.add_argument('--tess', type=float, default=400, help='longest triangle edge in inches near the playable area')
     ap.add_argument('--max-radius', type=float, default=0, help='drop meshes with a larger bounding radius')
+    ap.add_argument('--no-props', action='store_true', help='leave out GameObject props')
     ap.add_argument('--qb', help="target level's .qb (its node array gets the zone's rails)")
     ap.add_argument('--pre', help="target level's scripts .pre (rebuilt holding the new .qb)")
     ap.add_argument('--pre-entry', help=r'path of the .qb inside the .pre, e.g. levels\TR\TR.qb')
@@ -560,6 +607,13 @@ def main():
     print(f'{a.zone}: P1 restart {p1[1]} -> {a.at}, shift {delta}')
     if a.max_radius:
         meshes = [m for m in meshes if m.radius <= a.max_radius]
+    prop_cols = []
+    if not a.no_props:
+        pm, pmats, ptex, prop_cols = thawscene.load_props(a.install, a.zone)
+        meshes += pm
+        materials = {**pmats, **materials}
+        textures = {**ptex, **textures}
+        print(f'props: {len(pm)} meshes, {len(prop_cols)} collision objects')
     os.makedirs(a.outdir, exist_ok=True)
     lvl = build_level(meshes, materials, textures, delta, a.tex, a.tess)
     open(os.path.join(a.outdir, f'{a.name}.psp_level'), 'wb').write(lvl)
@@ -573,6 +627,8 @@ def main():
              if created and place and max(abs(x) for x in place[1]) < 0.05}
     disabled = {k for k, (created, place) in pieces.items() if not created or (place and k not in moves)}
     col = convert_col(blob[ce['offset']:ce['offset'] + ce['size']], delta16, disabled, moves)
+    if prop_cols:
+        col = append_col_objects(col, [dict(o, verts=o['verts'] + delta) for o in prop_cols])
     open(os.path.join(a.outdir, f'{a.name}.col.ps2'), 'wb').write(col)
     print(f'{a.name}.col.ps2 {len(col)} bytes, {len(disabled)} pieces disabled, {len(moves)} level objects placed')
 
