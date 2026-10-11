@@ -84,7 +84,18 @@ class WS:
                 return json.loads(msg)
 
     def call(self, obj, timeout=10):
-        """Send and wait for the reply (matched by ticket, or by event name when replies have none)."""
+        """Send and wait for the reply (matched by ticket, or by event name when replies have none).
+        Right after launch the game may not be running yet ('CPU not started'): retried for 60 s."""
+        for _ in range(60):
+            try:
+                return self._call(obj, timeout)
+            except RuntimeError as e:
+                if 'CPU not started' not in str(e):
+                    raise
+                time.sleep(1)
+        return self._call(obj, timeout)
+
+    def _call(self, obj, timeout):
         obj = dict(obj, ticket=str(time.time()))
         self.send(obj)
         self.s.settimeout(timeout)

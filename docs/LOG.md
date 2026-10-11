@@ -445,3 +445,39 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   standing dino gone and the fallen head created; from the same roof spot the red dinosaur stands
   beside the skater before the win and is gone after it. Not yet checked: the fallen head on the
   street visually, and that created pieces gain collision.
+
+### The barber and clothing store steps (Create-A-Skater with THAW's shop interiors)
+
+- Two goals now open the chain: the barber (`tr_goal_gaps48`, Remix ped GAP18) and the clothing
+  store clerk (`tr_goal_gaps49`, GAP19), each standing at THAW's shop door (`*_Ext` restart nodes).
+  With the goal active, Triangle within 160 in of the door sets the global `hw_shop_pending`
+  (defined in `chapter_info.qb`, which stays loaded) and calls the pause menu's own Edit Appearance
+  path, `pause_launch_level level = load_cas`. CAS's Done or Back (`exit_cas`) reloads Hollywood; the
+  level's startup (`hw_shop_return`) sees the pending step and wins it with `GoalManager_WinGoal`,
+  which needs no active goal (activating it would bring the giver's intro box back).
+- Backdrops (`tools/casbackdrop.py`): THAW's shop rooms are rendered offline from THAW's own data.
+  The barber is the streamed zone `z_ho_barbershop`; the clothing store is the `g_c_ho_*` pieces in
+  `z_ho`. The renderer is a small numpy rasteriser with perspective-correct UVs and THAW vertex
+  colours. The camera is Remix's CAS full-body camera (`cas_setup_rotating_camera`: position
+  (-60, 60, 80) and target (-40, 45, 0) from the skater) on THAW's CAS spot (`*_Edit` restarts), at
+  Remix's 88.18-degree widescreen field of view.
+- The image goes into `levels\mainmenu\mainmenu.psp_level` (the CAS room) as a 512x256 CLUT8 texture,
+  projected from the CAS camera onto a wall 60 in behind the skater and a floor sheet 0.5 in above the
+  room's floor. The CAS camera in that level looks along +Z (the offsets apply turned 180 degrees);
+  found with four tinted test walls.
+- Showing one backdrop: depth test off draws over the skater too (Remix draws the skater before the
+  world), and Kill/Create act only on the level's scene sectors (`*.geom.psp`). The engine finds a
+  sector's box by name, first match (FUN_00076da4 sets the per-box hidden flag; FUN_0005f79c applies
+  it each frame). So each backdrop box takes the name of a small room piece the CAS camera never sees
+  (`0x978F60B1`, `0xE0885027`, always behind the backdrop wall), and that piece's own box is renamed.
+  `hw_cas_backdrop` (end of `init_cas_skater_and_cam`, and two frames after the main menu startup)
+  kills every room piece but the floor `Box01` and the wanted host when a shop step is pending, and
+  both hosts otherwise.
+- New boxes added with their own node, collision object or appended `geom.psp` record did not respond
+  to Kill. A box flagged hidden in the file stays hidden after Create. Hollywood's dinosaur swap
+  relies on exactly that (fallen pieces built hidden, then `create`), so the fallen head probably
+  never appears; it needs checking.
+- Verified in the hidden test copy, at the real 160 in radius: the prompt shows at each door;
+  Triangle there opens CAS with that shop behind the skater; Back returns to Hollywood with the goal
+  won; the main menu looks as stock.
+- `tools/ppsspp_ws.py` retries calls while the emulated CPU is starting ('CPU not started').

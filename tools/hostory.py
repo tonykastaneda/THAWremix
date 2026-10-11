@@ -213,6 +213,26 @@ def cam_to(pos, yaw):
                                   (qbkey('skippable'), I(1)), (qbkey('play_hold'), I(1))])])
 
 
+# Remix's CAS camera (cas_setup_rotating_camera, full body): position and target offsets from the
+# skater, turned with the skater's facing
+CAS_CAM, CAS_LOOK = np.array([-60.0, 60, 80]), np.array([-40.0, 45, 0])
+
+
+def rot_y(v, th):
+    c, s = np.cos(th), np.sin(th)
+    return np.array([v[0] * c + v[2] * s, v[1], -v[0] * s + v[2] * c])
+
+
+def cas_view(spot, th):
+    return spot + rot_y(CAS_CAM, th), spot + rot_y(CAS_LOOK, th)
+
+
+def shot_yaws(yaw):
+    """Facings tried for each shop: env HW_SHOT_YAWS (offsets from the node's yaw, in degrees)."""
+    offs = os.environ.get('HW_SHOT_YAWS', '0 180 90 270').split()
+    return [yaw + np.radians(float(o)) for o in offs]
+
+
 # ---------------------------------------------------------------- main
 
 def main():
@@ -399,6 +419,19 @@ def main():
                                        ['GoalManager_WinGoal', 'Name', '=', tok_name(G[f'gaps{v}'])],
                                        ['endif']] for v in (48, 49)), [])),
     ]
+    # capture aid (HW_SHOT): the shop interiors seen the way Remix's CAS camera sees its skater,
+    # for the CAS backdrops (tools/casbackdrop.py); HUD and skater hidden, one view every 4 s
+    shot_lines = [['wait', 240, 'gameframes'], ['hide_everything'], ['skater', ':', 'hide']]
+    for node in ('Z_HO_TRG_Restart_BarberShop_Edit', 'Z_HO_TRG_Restart_CASShop_Edit'):
+        spot, yaw = thaw_place(node)
+        for th in shot_yaws(yaw):
+            cam, look = cas_view(spot, th)
+            shot_lines += [['PlaySkaterCamAnim', 'skater', '=', 0, 'targetid', '=', 'world',
+                            'targetOffset', '=', bytes([qb2.VEC]) + struct.pack('<3f', *map(float, look)),
+                            'positionOffset', '=', bytes([qb2.VEC]) + struct.pack('<3f', *map(float, cam)),
+                            'play_hold', 'frames', '=', 1, 'virtual_cam'],
+                           ['wait', 240, 'gameframes']]
+    shop_scripts.append(script('hw_shot_cams', shot_lines))
     # 4 sponsor challenge
     goals.append(combo_goal(43, 1500, 'Sponsor challenge: land a 1,500 point combo',
                             'Go to the skateshop, win a sponsor challenge', 'Mindy',
@@ -570,7 +603,7 @@ def main():
                                      ['while'],
                                      ['skater', ':', 'SetSpeed', 0],
                                      ['wait', 1, 'gameframes'],
-                                     ['repeat', 120]]),
+                                     ['repeat', int(os.environ.get('HW_TP_HOLD', 120))]]),
         script('hw_debug_peds', [['wait', 150, 'gameframes'], ['<hw_peds>', '=', "'peds:"],
                                  ['if', 'ObjectExists', 'id', '=', 'TRG_G_COUNTER7_Pro'], ['FormatText', 'TextName', '=', 'hw_peds', "'%a 0", 'a', '=', '<hw_peds>'], ['endif'],
                                  ['if', 'ObjectExists', 'id', '=', 'TRG_G_GAP16_Pro'], ['FormatText', 'TextName', '=', 'hw_peds', "'%a 1", 'a', '=', '<hw_peds>'], ['endif'],
@@ -620,6 +653,8 @@ def main():
         lines = []
         if slot == spare[1]:
             lines = [['spawnscript', 'hw_shop_return']]
+        if slot == spare[2] and os.environ.get('HW_SHOT'):
+            lines = [['spawnscript', 'hw_shot_cams']]
         if os.environ.get('HW_DEBUG') and slot == spare[0]:
             lines = [] if os.environ.get('HW_NOPOS') else [['spawnscript', 'hw_debug_pos']]
             if os.environ.get('HW_SPAWN'):
