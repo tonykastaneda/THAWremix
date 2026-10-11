@@ -261,3 +261,28 @@ collision loader and BSP layout used above.
 Still missing in Hollywood: GameObject props (39 chairs, 13 tables, 7 plants, barricades built
 from separate model files), pedestrians and goals (the training level's still run, at training
 coordinates), rotated LevelObjects' collision.
+
+### THAW HUD on Remix
+
+`tools/thawhud.py "THAW CLEAN/Game" extracted/remix_data work/hudout` gives Remix THAW's score
+banner, special meter and balance meter. Both games build these with the same `panelstuff.qb`
+elements (`the_score_sprite`, `the_special_bar_special`, `the_special_bar_sprite`,
+`the_balance_meter` and its arrow, with the same arc path for the arrow), so the port is:
+
+- textures, in `pre\panelsprites.pre` and loose: `score_small` (green "SCORE:" banner),
+  `special`, `specialbar`, `balancemeter` (THAW's `balancemeter_bg` arc with down arrows),
+  `balancearrow` and `balancearrow_glow` (THAW's glowing ball); and in `pre\themes.pre` the
+  theme's sponsor logo, which sits at the left end of the banner (Remix's star, THAW's brush
+  stroke)
+- theme colours in `scripts\game\menu\themes.qb` (inside `pre\qb_scripts.pre`): THAW leaves the
+  art untinted (128,128,128) where Remix tints the banner yellow and meters blue; the arrow is
+  dark grey and the special bar gold
+- `panelstuff.qb`: the SPECIAL letters at THAW's scale (1.73, 1.4) and position (10, 30); same-size
+  tokens patched in place (THAW also tilts them by -0.5 degrees, not done)
+
+Sprite formats (`tools/pspimg.py`): Remix `.img.psp` is a 0x20-byte header (format 0x14 = 16
+colours, 0x13 = 256), a 32-bit palette, swizzled 4/8-bit pixels. THAW `.img.wpc` sprites are the
+ABADD00D texture record, stored bottom row first.
+
+Testing note: PPSSPP's Start is Space, not Enter (the pause menu only opens with Space).
+Balance Meters is On in the save's display options. The THAW meter shows mid-grind.
