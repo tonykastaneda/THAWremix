@@ -389,3 +389,18 @@ paused (`cpu.stepping`), reading GPU buffers that way under Vulkan lost the devi
 debugger connection after one closed hung, so a whole test runs on one connection, and any helper
 process started without a console must not start console programs (each opened a visible window).
 The user's own PPSSPP and its settings are never touched.
+
+### THAW look: boot screen, loading screens, save icon
+
+- Boot screen is `\legal.tga` (480x272 24-bit TGA, bottom-up; listed twice), now THAW's title screen
+  (`loadscrn_x`). The original is kept at `work/orig_files/legal.tga`.
+- `tools/thawscreens.py` converts THAW load screens (640x448) into Remix's `images\loadscrn_*.img.psp`
+  (0x20 header, format 0, then 480x272 linear RGBA8888): the training slot gets Hollywood, plus
+  generic, 2-player, online, created and editor screens (19 files, `work/screens`).
+- Save and XMB icon: Remix's saves use `disc0:/PSP_GAME/ICON0.PNG` and `PIC1.PNG` (strings in the
+  executable). Both are now the THAW logo cut from the title screen onto black (144x80, 480x272).
+  `ICON1.PMF` (animated icon) and `SND0.AT3` (XMB music) are moved to `work/orig_psp_game` so the
+  static icon shows. Saves made from now on carry the new icon.
+- Launch videos: Remix's `Movies\*.pmf` are PSMF (H.264 Main 4.2... 480x272 plus ATRAC3plus audio in
+  private stream 1). ffmpeg reads them and THAW's Bink files but cannot write PSMF or encode
+  ATRAC3plus, so THAW's videos are not in yet.
