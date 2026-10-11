@@ -9,3 +9,6 @@ target/
 .claude/away.flag
 /ghidra/proj/
 __pycache__/
+/THAWremix/
+/ghidra/proj_remix/
+work/

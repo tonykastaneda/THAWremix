@@ -141,3 +141,123 @@ All three discs are unpacked under `extracted/`:
 The game is Z-Axis's engine ("Zge4"), written in C. Assert strings name the source files
 (`\bmx3\src\com\action\physics.c`, `camera.c`, `game.c`), and the discs carry plain-text config
 (`scene.txt`, level `objctv.txt`, editor `.txt`).
+
+## THAW on THUG2 Remix (PSP), started 2026-10-10
+
+Goal: THAW's areas and trick feel running on a PSP (and on a Vita through Adrenaline) by replacing
+the content of THUG2 Remix, whose engine already runs there. Areas become separate levels. The Bert
+slide is cut; its two story uses (Iggy's lesson at the ranch, the Santa Monica pier goal) get another
+move. Milestone 1 is Hollywood loading in Remix under PPSSPP, skateable.
+
+Inputs (not committed): `THAWremix/` holds the Remix and THAW PS2 images; PPSSPP is at
+`E:\SYSTEMS\PPSSPP`. Unpacked to `extracted/remix_psp`, `extracted/remix_data`, `extracted/thaw_ps2`,
+`extracted/thaw_ps2_data`.
+
+What is understood:
+
+- **`.hed`/`.wad`** (`tools/hed.py`): offset, size, path. Remix uses byte offsets, THAW PS2 sector
+  numbers. `replace` patches a file into the unpacked Remix folder, which PPSSPP boots directly.
+- **Remix executable**: `BOOT.BIN` is an unencrypted ELF linked at 0. `tools/prx2img.py` flattens it
+  for Ghidra's raw loader; 9,631 functions are in `extracted/decomp_remix`. Stock Ghidra cannot
+  decode the VFPU routines, so those are read with `tools/mipsdis.py` (capstone in `bin/pyenv`).
+- **`.psp_level`** (`tools/psplevel.py`, layout in its header comment): one file holds a level's
+  textures, visibility boxes, vertices, per-material GE display lists and a stream of triangle
+  strips. Read from the loader at `0005fcb0` and the strip interpreter at `00061690`. The reader
+  accounts for every vertex byte in all 80 shipped files.
+- **Collision** is version 10 in both games with the same 0x40-byte object records; THAW's header
+  is 0x30 bytes longer.
+
+Verified in the running game (`tools/ppsspp_shot.ps1` boots, presses keys and saves frames): with
+every vertex colour in `tr.psp_level` set to red and patched into the wad, the training level
+renders red. The key sequence `25:z,6:ENTER,6:ENTER,6:ENTER,8:z,18:z,10:z,3:z` reaches gameplay
+through "Continue Story Mode" on the existing save, which opens the training level.
+
+Budget, Boston against THAW PS2 Hollywood: 53,000 triangles and 1.2 MB of 16-colour 64x64 textures
+in a 2.5 MB `.psp_level` plus 0.9 MB collision, against 3.3 MB textures, 3.0 MB geometry and 1.1 MB
+collision. Geometry outside the 16-bit range (8,192 in either side of the level offset) uses the
+20-byte float vertex format, as Remix's own backdrops do.
+
+Still to do for milestone 1: a `.psp_level` writer; THAW geometry to strips of at most 31 vertices
+with boxes; textures to swizzled 16- or 256-colour; the `.geom.psp` sector list (not yet read);
+collision header conversion; a THUG2-format level `.qb` with restarts and rails, repacked into its
+`.pre`.
+
+### Milestone 1 reached, 2026-10-10 evening
+
+THAW PC Hollywood (`z_ho`) loads in THUG2 Remix under PPSSPP in place of the training level, renders
+fully (streets, buildings, signs, translucent decals) and is skateable on its own collision.
+`tools/thaw2psp.py build "THAW CLEAN/Game" z_ho work/out tr --at <tr P1 restart>` writes
+`tr.psp_level` (3.8 MB) and `tr.col.ps2` (1.1 MB); `hed.py replace` patches both into the unpacked
+game (it now repoints every index entry with the name; `tr.psp_level` is listed twice).
+`tools/ppsspp_ctl.ps1` drives a running PPSSPP one key or capture at a time.
+
+How the conversion works (`tools/thawscene.py` reads THAW, `tools/thaw2psp.py` writes Remix):
+
+- **Placement.** The zone is shifted so its "P1: Restart" lands on the training level's
+  (-3020.95, -765.41, -3511.32), so the training level's scripts load unchanged. The shift is a
+  whole number of sixteenths (the collision grid) and there is no rotation, so you spawn facing
+  the other way.
+- **Visibility boxes were misread before.** They are 8 half floats, (min xyz, 0, max xyz, 0) in
+  vertex space / 32768, converted with `vh2f` in the VFPU box test at `0006154c`. Checked on `tr`
+  and `sz`: every vertex lies inside the box its strip names. Boxes written as integers culled
+  almost everything. `psplevel.py`'s header comment is corrected.
+- **Boxes**: one per piece (sector) per 4,096-inch cell; 877 for Hollywood (limit 2,045).
+- **Material lists**: one per distinct THAW material state, each setting all texture and blend
+  state (lists run back to back and only change what they name). Material switches are signed
+  16-bit word indices, so the list block must stay under 32,768 words; identical lists are shared.
+  Blend from the material record: +0x90 pass-0 blend mode (0 opaque, 1/2 add, 5 blend, 6 fixed
+  blend, alpha at +0x93), +0xA0/+0xA2 UV clamp. Alpha textures in mode 0 and hard-edged mode 5
+  are alpha-tested in the opaque pass; the rest go to the translucent pass.
+- **Textures**: DXT decoded, longest side 64, quantised to 16 colours (CLUT4, 32-bit palette),
+  swizzled, up to 4 mips: 746 textures in 1.4 MB.
+- **Geometry**: THAW strips cut to at most 31 vertices; triangles over 400 inches tessellated (the
+  PSP drops triangles crossing the near plane rather than clipping). Vertex colour 0x80 maps to
+  nibble 8 because the texture function doubles colour (`TEXFUNC 0x00010100` in the render setup
+  at `000608dc`). Culling is off in every list. Strips beyond the 16-bit range use the wide format.
+- **Collision**: THAW's header is 0x30 bytes longer; dropping those bytes keeps every offset valid.
+  The block order is objects, vertices (aligned 16), intensities, faces (aligned 4), one byte per
+  large face (padded to 4), BSP node array size, nodes, face indices. Bounding boxes, float
+  vertices and BSP split points (sixteenths, axis in the low two bits) are shifted; fixed-point
+  vertices are relative to the object box and need nothing. Pieces absent at level start and
+  LevelObjects (modelled at the origin) get `mFD_NON_COLLIDABLE` on every face; the trigger bit is
+  cleared. A checker walked all 7,091 BSP leaves after conversion: every face lies in its cell.
+  Terrain types (max 32) are inside Remix's range.
+
+Not done yet: rails and other nodes (the training level's node array still loads, so no grinds on
+Hollywood rails, and the training goals' positions are meaningless), LevelObject collision, the
+`.geom.psp` sector list (the training level's is left in place and nothing has complained), the
+sky (training level's), and memory headroom has not been measured on real hardware.
+
+The test path in the unpacked game: `work/datap.hed.orig` is the untouched index; restoring it
+restores the stock game (patched files were appended to the wad, original data untouched;
+`work/datap.wad.size` holds the original wad size for truncating).
+
+Project Mod (`E:\ROMS\PSP\Tony Hawk Project Mod.chd`) turned out to be a community build on Page 44's
+Project 8 PSP engine (`Skate8c`), carrying Remix levels and THUG1's Hawaii in the same `.psp_level`
+v11 format (they pass `psplevel.py check`), so someone else has also imported foreign levels into
+this format. The THUG source port at github.com/iwannagooutside/thug-vita-port supplied the
+collision loader and BSP layout used above.
+
+### Rails, level objects and sky, same evening
+
+- **Rails grind.** `build ... --qb <tr.qb> --pre <tr_scripts.pre> --pre-entry levels\TR\TR.qb`
+  rewrites the training level's node array (`tools/qb2.py` reads and writes the THUG2 token
+  stream; the array round-trips byte-exactly in meaning): its 449 rail and 177 climbing nodes
+  are sunk 100,000 inches below the map, keeping every index, name and link its scripts rely on,
+  and Hollywood's 1,530 rail nodes that exist at level start are appended with links
+  renumbered. The new `TR.qb` goes into `pre\tr_scripts.pre` uncompressed (other entries keep
+  their original bytes) and over the loose `levels\tr\tr.qb`. In game: FS 50-50 on a Hollywood
+  ledge, 128 points. THUG2 nodes come in two forms: full, and compressed (Pos, Angles, Name plus
+  an unnamed reference to a shared struct holding Class and the rest).
+- **LevelObjects with collision** (fans, signs, posts, the crane): the 28 that exist at start and
+  are unrotated (three posts at 1 degree count as unrotated) are moved to their node in the
+  collision too: box, float vertices and their own BSP subtree. The leaf checker still finds
+  every face inside its cell.
+- **Sky**: `thaw2psp.py sky "THAW CLEAN/Game" default_sky <out>` converts THAW's dome, scaled to
+  the 7,800-inch compact dome Remix skies use (offset 0); patched over `levels\tr_sky`.
+- `.pre` header word at 0x0C is not the plain sum of entry sizes (some buffer size hint); it is
+  grown by however much the replaced entry grew.
+
+Still missing in Hollywood: GameObject props (39 chairs, 13 tables, 7 plants, barricades built
+from separate model files), pedestrians and goals (the training level's still run, at training
+coordinates), rotated LevelObjects' collision.
