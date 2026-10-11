@@ -349,3 +349,16 @@ state keyed by goal id, and the new ids are not in it. The moved ped nodes are n
 and all six exist in game (checked with `ObjectExists`); talking to the non-caveman ones has not been
 tested yet. Testing aids added: `HW_UNLOCK_ALL=1` (no `Unlocked_By_Another`), `HW_NOPOS=1`, and with
 `HW_SPAWN` the debug build teleports the skater there 1.5 s after load.
+
+### Caveman lesson complete (3 parts)
+
+THAW's "learn caveman" is three chained goals, all from the same skater: switch to walk and back
+(counter), grind the red ropes (`z_ho_goal_gaps40`), follow my line (`z_ho_goal_gaps4`). Parts 2
+and 3 are rail triggers: THAW's red-rope node `VelvetRope37` runs `CavemanSeriesEasy_Check` (win)
+and `CavemanCombo_Gap_Start` (win if `GetNumberOfTrickOccurrences` finds a Caveman in the combo).
+Here `hw_rope_trigger` sits on all 20 red-rope rail nodes along the Walk of Fame and does both, the
+second with Remix's trick text `'CaveMan'`. Both goals restart at THAW's `GAPS4_RESTARTNode`, beside
+the ropes (the unused training node `TRG_G_GAP7_RestartNode` moved there). Verified: a separate
+Caveman then grind does not count; walk, jump, Caveman (L in the air) straight into a rope grind
+(Caveman + FS 50-50) wins. The punk goal is retitled "Get your stuff back". Testing aid:
+`HW_START_GOAL=<type><version>` (e.g. gaps42) starts that goal 2 s after load.

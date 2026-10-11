@@ -195,6 +195,11 @@ def main():
     arr, end = qb2.parse_value(d, start)
     want = {qbkey(k): k for k in places}
     moved = 0
+    # the red velvet ropes along the Walk of Fame (THAW's caveman lessons grind these)
+    rope_keys = {qbkey(n['Name'][1:]) for n in tnodes.values()
+                 if n.get('Class') == '$RailNode' and 'VelvetRope' in str(n.get('Name'))
+                 and abs(n['Pos'][2] + 88) < 6 and -1330 < n['Pos'][0] < -150}
+    ropes_set = 0
     for n in arr[1]:
         nm = qb2.get(n, qbkey('Name'))
         if nm and nm[1] in want:
@@ -209,9 +214,9 @@ def main():
                     n[1][i] = (k, ('vec', (0.0, yaw, 0.0)))
             moved += 1
         # the red rope rail THAW checks for caveman lesson part 2
-        if nm and nm[1] == qbkey('Z_HO_TRG_Rail_VelvetRope37'):
+        if nm and nm[1] in rope_keys and qb2.get(n, qbkey('TriggerScript')) is None:
             n[1].append((qbkey('TriggerScript'), ('name', qbkey('hw_rope_trigger'))))
-            print('red rope rail: trigger script set')
+            ropes_set += 1
     # testing aid: HW_SPAWN="x y z yaw" puts the level's other restarts at one spot
     if os.environ.get('HW_SPAWN'):
         x, y, z, yaw = map(float, os.environ['HW_SPAWN'].split())
@@ -239,11 +244,11 @@ def main():
         print('test spawn at', x, y, z)
     trqb = d[:start] + qb2.encode_value(arr) + d[end:]
     open(os.path.join(out, 'tr.qb'), 'wb').write(trqb)
-    print(f'nodes moved: {moved} of {len(places)}')
+    print(f'nodes moved: {moved} of {len(places)}; red rope trigger on {ropes_set} rail nodes')
 
     # goals
     ped = lambda v: places[v]  # noqa: E731
-    G = {k: qbkey(f'tr_goal_{k}') for k in ('counter7', 'gaps41', 'highcombo5', 'gaps40', 'counter40', 'highcombo6',
+    G = {k: qbkey(f'tr_goal_{k}') for k in ('counter7', 'gaps41', 'gaps42', 'highcombo5', 'gaps40', 'counter40', 'highcombo6',
                                            'highcombo1', 'highcombo2', 'highcombo3')}
 
     def common(text, view, who, pro_node, restart_node, child=None, first=False):
@@ -313,6 +318,13 @@ def main():
                                    ['if', 'Triggertype', '<trigger_array>'],
                                    ['if', 'GoalManager_GoalIsActive', 'Name', '=', tok_name(G['gaps41'])],
                                    ['GoalManager_SetGoalFlag', 'Name', '=', tok_name(G['gaps41']), 'got_1', 1],
+                                   ['endif'],
+                                   # follow my line: the grind must come in a combo that has a Caveman in it
+                                   ['if', 'GoalManager_GoalIsActive', 'Name', '=', tok_name(G['gaps42'])],
+                                   ['GetNumberOfTrickOccurrences', 'TrickText', '=', "'CaveMan"],
+                                   ['if', bytes([0x0E]), '<Number_Of_Occurrences>', bytes([0x14]), 0, bytes([0x0F])],
+                                   ['GoalManager_SetGoalFlag', 'Name', '=', tok_name(G['gaps42']), 'got_1', 1],
+                                   ['endif'],
                                    ['endif'],
                                    ['endif']]),
         # THAW's caveman lesson counts switching from walking back to skating; polled, because the
@@ -404,8 +416,17 @@ def main():
             red_ropes = goal_call('AddGoal_Gaps', [('version', I(41)), ('time', I(120)),
                                                    ('goal_flags', ('array', [N('got_1')]))] + common(
                 'Grind (\\b0) the red ropes', 'Learn from the Hollywood skaters', 'Hollywood Skater',
-                'TRG_G_COUNTER7_Pro', 'TRG_G_GAP7_RestartNode', 'highcombo5'))
+                'TRG_G_COUNTER7_Pro', 'TRG_G_GAP7_RestartNode', 'gaps42'))
             body = body.replace(bytes([qb2.NEWLINE, 0x24]), red_ropes + bytes([0x24]), 1)
+        if slot == spare[-2]:
+            # caveman lesson part 3 (THAW's z_ho_goal_gaps4): off the board, Caveman back on, jump and
+            # grind the red ropes, all in one combo; winning it is THAW's "learned Caveman" moment
+            line = goal_call('AddGoal_Gaps', [('version', I(42)), ('time', I(120)),
+                                              ('goal_flags', ('array', [N('got_1')]))] + common(
+                'Follow my line: get off your board (\\be), Caveman (\\be) back on, then jump and grind (\\b0) the red ropes in one combo',
+                'Learn from the Hollywood skaters', 'Hollywood Skater',
+                'TRG_G_COUNTER7_Pro', 'TRG_G_GAP7_RestartNode', 'highcombo5'))
+            body = body.replace(bytes([qb2.NEWLINE, 0x24]), line + bytes([0x24]), 1)
         edits.append((s, e, body))
     new = bytearray()
     pos = 0
