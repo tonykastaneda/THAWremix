@@ -625,3 +625,27 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   (next: the audio); if both fail, it is something else in the data.
 - Git Bash rewrites arguments that start with `/` into Windows paths; use MSYS_NO_PATHCONV=1 when
   passing `--file /PSP_GAME/...`.
+
+### ISO builder now reproduces the original byte for byte
+
+- Both test ISOs (re-encoded videos, stock videos) crashed the same way on the PSP 3000, so the
+  videos were not the cause. The builder was then checked on its own: rebuilding the untouched
+  Remix tree differed from the original ISO in several places the PSP's UMD filesystem may rely on.
+  - Every directory record carries a 14-byte CD-XA system use field: owner 0, attributes 0x8D55
+    (directory) / 0x0D55 (file), "XA", file number 0.
+  - The PVD application use area holds the disc id (`ULUS-10014|C1259CF10598D6E2|0001`) and the
+    CD-XA marker; the copyright field reads ACTIVISION.
+  - There are optional L and M path tables (L at 18, its copy at 19, M at 20, its copy at 21;
+    directories from 22).
+  - Dates carry a +09:00 timezone byte, and each file and directory has its own date.
+  - Directory records are not sorted: each directory keeps its own order (EBOOT.BIN before
+    BOOT.BIN, files before subdirectories in USRDIR).
+  - UMD_DATA.BIN follows EBOOT.BIN unaligned (sector 1607); everything else is 16-sector aligned.
+- `mkumd.py --like` now copies the original's system area, PVD and terminator (patching only the
+  layout fields), writes the XA fields and both path table copies, and keeps the original's record
+  order, dates and sectors for every file that has not moved. The untouched tree rebuilds
+  byte-identical to the original ISO.
+- `work/mklayers.py` builds cumulative hardware test layers from the stock archive: L1 boot and
+  load screens, videos, icons; L2 + HUD; L3 + Hollywood and story; L4 everything. L4's archive
+  entries are byte-identical to the test tree's, and it boots in PPSSPP to the menu, Hollywood and
+  the pause menu.

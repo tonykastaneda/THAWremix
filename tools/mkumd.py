@@ -64,12 +64,15 @@ def compact_wad(hed_path, wad_path, out_dir):
 
 
 def read_iso_order(path):
-    """[(path, lba)] of the files in an ISO, and its PVD creation date."""
+    """[(path, lba)] of the files in an ISO, and its PVD creation date. read_iso_order.records holds
+    each directory's record names in the image's own order (the shipped UMDs do not sort them)."""
     f = open(path, 'rb')
     f.seek(16 * SECTOR)
     pvd = f.read(SECTOR)
     root_lba, root_size = struct.unpack_from('<I', pvd, 156 + 2)[0], struct.unpack_from('<I', pvd, 156 + 10)[0]
     out = []
+    read_iso_order.records = {}
+    read_iso_order.dates = {}
 
     def walk(lba, size, prefix):
         f.seek(lba * SECTOR)
@@ -85,6 +88,8 @@ def read_iso_order(path):
             name = d[p + 33:p + 33 + nl]
             if name not in (b'\0', b'\1'):
                 full = prefix + '/' + name.decode('latin-1')
+                read_iso_order.records.setdefault(prefix, []).append(name.decode('latin-1'))
+                read_iso_order.dates[full] = d[p + 18:p + 25]
                 if flags & 2:
                     walk(elba, esz, full)
                 else:
@@ -99,12 +104,17 @@ class Node:
         self.name, self.parent, self.children, self.lba, self.size = name, parent, {}, 0, 0
 
 
-def dir_record(name_bytes, lba, size, is_dir, date):
+def dir_record(name_bytes, lba, size, is_dir, date, xa=True):
+    """With xa, the 14-byte CD-XA system use field the shipped UMDs carry on every record (owner 0,
+    attributes 0x8D55 for a directory / 0x0D55 for a file, "XA", file number 0)."""
     n = len(name_bytes)
     length = 33 + n + (1 - n % 2)
-    rec = bytes([length, 0]) + both32(lba) + both32(size) + date + bytes([2 if is_dir else 0, 0, 0]) + \
-        both16(1) + bytes([n]) + name_bytes
-    return rec + bytes(length - len(rec))
+    rec = bytes([length + (14 if xa else 0), 0]) + both32(lba) + both32(size) + date + \
+        bytes([2 if is_dir else 0, 0, 0]) + both16(1) + bytes([n]) + name_bytes
+    rec += bytes(length - len(rec))
+    if xa:
+        rec += bytes(4) + bytes([0x8D if is_dir else 0x0D, 0x55]) + b'XA' + bytes(6)
+    return rec
 
 
 def build(root_dir, out_iso, like=None, overrides=None):
@@ -114,13 +124,22 @@ def build(root_dir, out_iso, like=None, overrides=None):
         for f in fn:
             rel = '/' + os.path.relpath(os.path.join(dp, f), root_dir).replace('\\', '/')
             files.append(rel)
-    date7 = bytes([105, 2, 15, 13, 18, 16, 0])  # 2005-02-15 13:18:16, as the original's PVD
+    date7 = bytes([105, 2, 15, 13, 18, 16, 0x24])  # 2005-02-15 13:18:16 +09:00, as the original's
     pvd_date = b'2005021513181600\x24'
     order = files
+    orig_lba = {}
+    rec_order = {}
+    rec_dates = {}
+    head = None
     if like:
         orig, pvd_date = read_iso_order(like)
+        rec_order = read_iso_order.records
+        rec_dates = read_iso_order.dates
+        orig_lba = dict(orig)
         rank = {p: i for i, (p, lba) in enumerate(sorted(orig, key=lambda x: x[1]))}
         order = sorted(files, key=lambda p: (rank.get(p, 10 ** 9), p))
+        with open(like, 'rb') as f:
+            head = f.read(18 * SECTOR)  # system area, PVD and terminator, used as the template
     # tree
     root = Node('')
     for path in files:
@@ -128,6 +147,14 @@ def build(root_dir, out_iso, like=None, overrides=None):
         for part in path.strip('/').split('/')[:-1]:
             node = node.children.setdefault(part, Node(part, node))
         node.children[path.rsplit('/', 1)[1]] = path
+    def path_of(n):
+        return '' if n.parent is None else path_of(n.parent) + '/' + n.name
+
+    def child_order(n):
+        """Children in the original image's record order, new names after them, sorted."""
+        known = rec_order.get(path_of(n), [])
+        rank = {k: i for i, k in enumerate(known)}
+        return sorted(n.children, key=lambda k: (rank.get(k, 10 ** 6), k))
     dirs = []  # breadth first, children sorted
 
     def collect():
@@ -135,7 +162,7 @@ def build(root_dir, out_iso, like=None, overrides=None):
         while queue:
             n = queue.pop(0)
             dirs.append(n)
-            for k in sorted(n.children):
+            for k in sorted(n.children):  # (path tables: directories in sorted order)
                 if isinstance(n.children[k], Node):
                     queue.append(n.children[k])
     collect()
@@ -154,7 +181,7 @@ def build(root_dir, out_iso, like=None, overrides=None):
     # directory sizes (records for '.', '..' and children)
     def dir_bytes(d):
         recs = [dir_record(b'\0', 0, 0, True, date7), dir_record(b'\1', 0, 0, True, date7)]
-        recs += [dir_record(k.encode(), 0, 0, isinstance(v, Node), date7) for k, v in sorted(d.children.items())]
+        recs += [dir_record(k.encode(), 0, 0, isinstance(d.children[k], Node), date7) for k in child_order(d)]
         size, cur = 0, 0
         for r in recs:
             if cur + len(r) > SECTOR:
@@ -164,16 +191,24 @@ def build(root_dir, out_iso, like=None, overrides=None):
         return size + SECTOR
     pt_size = len(path_table(False))
     pt_sectors = (pt_size + SECTOR - 1) // SECTOR
+    # L table, its optional copy, M table, its copy (as the shipped UMDs)
     lba = 18
     l_table, lba = lba, lba + pt_sectors
+    l_copy, lba = lba, lba + pt_sectors
     m_table, lba = lba, lba + pt_sectors
+    m_copy, lba = lba, lba + pt_sectors
     for d in dirs:
         d.size = dir_bytes(d)
         d.lba = lba
         lba += d.size // SECTOR
     file_lba, file_size, src = {}, {}, {}
     for path in order:
-        lba = (lba + ALIGN - 1) // ALIGN * ALIGN
+        # a file stays at its sector in the original image while nothing before it has grown
+        # (UMD_DATA.BIN follows EBOOT.BIN unaligned there); otherwise 16-sector alignment
+        if path in orig_lba and orig_lba[path] >= lba:
+            lba = orig_lba[path]
+        else:
+            lba = (lba + ALIGN - 1) // ALIGN * ALIGN
         s = overrides.get(path, os.path.join(root_dir, path.strip('/')))
         src[path] = s
         file_lba[path], file_size[path] = lba, os.path.getsize(s)
@@ -181,13 +216,17 @@ def build(root_dir, out_iso, like=None, overrides=None):
     total = (lba + ALIGN - 1) // ALIGN * ALIGN
 
     def dir_data(d):
-        recs = [dir_record(b'\0', d.lba, d.size, True, date7),
-                dir_record(b'\1', d.parent.lba if d.parent else d.lba, d.parent.size if d.parent else d.size, True, date7)]
-        for k, v in sorted(d.children.items()):
+        here = rec_dates.get(path_of(d), date7)
+        up = rec_dates.get(path_of(d.parent), date7) if d.parent else here
+        recs = [dir_record(b'\0', d.lba, d.size, True, here),
+                dir_record(b'\1', d.parent.lba if d.parent else d.lba, d.parent.size if d.parent else d.size, True, up)]
+        for k in child_order(d):
+            v = d.children[k]
+            when = rec_dates.get(path_of(d) + '/' + k, date7)  # the original's date for that name
             if isinstance(v, Node):
-                recs.append(dir_record(k.encode(), v.lba, v.size, True, date7))
+                recs.append(dir_record(k.encode(), v.lba, v.size, True, when))
             else:
-                recs.append(dir_record(k.encode(), file_lba[v], file_size[v], False, date7))
+                recs.append(dir_record(k.encode(), file_lba[v], file_size[v], False, when))
         out, cur = bytearray(), bytearray()
         for r in recs:
             if len(cur) + len(r) > SECTOR:
@@ -209,7 +248,7 @@ def build(root_dir, out_iso, like=None, overrides=None):
     pvd[132:140] = both32(pt_size)
     pvd[140:144] = struct.pack('<I', l_table)
     pvd[148:152] = struct.pack('>I', m_table)
-    pvd[156:190] = dir_record(b'\0', root.lba, root.size, True, date7)
+    pvd[156:190] = dir_record(b'\0', root.lba, root.size, True, date7, xa=False)
     for a, b in ((190, 318), (318, 446), (446, 574), (702, 739), (739, 776), (776, 813)):
         pvd[a:b] = b' ' * (b - a)
     pvd[574:702] = b'PSP GAME'.ljust(128)
@@ -219,12 +258,23 @@ def build(root_dir, out_iso, like=None, overrides=None):
     pvd[881] = 1
     term = bytearray(SECTOR)
     term[0:7] = b'\xffCD001\x01'
+    system = bytes(16 * SECTOR)
+    if head:
+        # the original's own descriptors (its copyright, and the application use area holding the
+        # disc id, e.g. "ULUS-10014|C1259CF10598D6E2|0001", and the CD-XA marker), with this
+        # image's layout written over them
+        system, term = head[:16 * SECTOR], head[17 * SECTOR:18 * SECTOR]
+        layout = pvd
+        pvd = bytearray(head[16 * SECTOR:17 * SECTOR])
+        for a, b in ((80, 88), (132, 156), (156, 190)):
+            pvd[a:b] = layout[a:b]
+    pvd[144:148] = struct.pack('<I', l_copy)
+    pvd[152:156] = struct.pack('>I', m_copy)
     with open(out_iso, 'wb') as out:
-        out.write(bytes(16 * SECTOR) + pvd + term)
-        out.write(bytes(SECTOR * (l_table - 18)))
-        for big, at in ((False, l_table), (True, m_table)):
+        out.write(system + pvd + term)
+        for big, at in ((False, l_table), (False, l_copy), (True, m_table), (True, m_copy)):
             out.seek(at * SECTOR)
-            out.write(path_table(big))
+            out.write(path_table(big).ljust(pt_sectors * SECTOR, b'\0'))
         for d in dirs:
             out.seek(d.lba * SECTOR)
             out.write(dir_data(d))
@@ -262,7 +312,10 @@ def main():
     tmp = None
     if compact:
         tmp = tempfile.mkdtemp(prefix='mkumd_', dir=os.path.dirname(os.path.abspath(out)))
-        h, w = compact_wad(os.path.join(game, compact + '.hed'), os.path.join(game, compact + '.wad'), tmp)
+        key = '/' + compact.replace('\\', '/')
+        # (a --file override of the pair is what gets packed)
+        h, w = compact_wad(overrides.get(key + '.hed', os.path.join(game, compact + '.hed')),
+                           overrides.get(key + '.wad', os.path.join(game, compact + '.wad')), tmp)
         overrides['/' + compact.replace('\\', '/') + '.hed'] = h
         overrides['/' + compact.replace('\\', '/') + '.wad'] = w
     try:
