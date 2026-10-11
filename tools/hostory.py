@@ -5,6 +5,9 @@
 THAW's Hollywood story chain (chapter_info) up to Beverly Hills unlocking, rebuilt on Remix's own
 goal templates in the training level's scripts:
 
+  0a Change your look      gaps        the barber: Triangle at the barber shop door opens Remix's
+                                       Create-A-Skater; coming back from it wins the goal
+  0b Change your clothes   gaps        the same at the clothing store
   1 Learn caveman          counter     reuses training's caveman goal logic (tr_goal_counter7)
   2 Sponsor challenge      high combo  THAW's sponsor challenge is its own system; a combo here
   3 Kickflip over Ben      gaps        any flip trick while near Ben Whofleck
@@ -14,8 +17,12 @@ goal templates in the training level's scripts:
 
 Each goal is the child of the one before. Goal peds are the training level's own goal ped nodes
 (Remix pros stand in for THAW's characters) moved, with their restart nodes, to THAW's goal
-positions. The barber and clothing shop steps are left out (no shops in Remix); cutscenes are not
-converted.
+positions. Cutscenes are not converted.
+
+Remix has no shop interiors, so the two shop steps go through the pause menu's own Edit Appearance
+path (pause_launch_level level = load_cas): the level is remembered, CAS loads, and its Done or Back
+reloads the level. A global set before leaving (hw_shop_pending, defined in chapter_info.qb, which
+stays loaded) tells the level's startup that the shop step is done.
 
 Writes tr.qb (node moves on top of the build's), tr_scripts.qb and tr_scripts.pre.
 """
@@ -59,7 +66,14 @@ PLACES = [
     ('TRG_G_GAP5_RestartNode', 'Z_HO_TRG_G_Gaps5_RestartNode'),
     ('TRG_G_GAP20_Pro', 'Z_HO_TRG_G_HIGHCOMBO_PRO'),  # Mindy at the wool protest
     ('TRG_G_GAP20_RestartNode', ('Z_HO_TRG_G_HIGHCOMBO_RestartNode', (0, 0, 0), -1.5708)),  # THAW's start, rolling
+    # the barber and the clothing store clerk stand beside their shop doors, facing the street; the
+    # restart nodes are THAW's own spots outside the doors, facing them (-X)
+    ('TRG_G_GAP18_Pro', ('Z_HO_TRG_Restart_BarberShop_Ext', (-40, 0, 110), -1.5708)),
+    ('TRG_G_GAP18_RestartNode', 'Z_HO_TRG_Restart_BarberShop_Ext'),
+    ('TRG_G_GAP19_Pro', ('Z_HO_TRG_Restart_CASShop_Ext', (-40, 0, 110), -1.5708)),
+    ('TRG_G_GAP19_RestartNode', 'Z_HO_TRG_Restart_CASShop_Ext'),
 ]
+SHOP_DOOR_RADIUS = int(os.environ.get('HW_SHOP_RADIUS', 160))  # testing aid override;  # inches from a point 50 in ahead of the shop's restart node, toward the door
 
 
 # ---------------------------------------------------------------- tiny script assembler
@@ -283,7 +297,7 @@ def main():
 
     # goals
     ped = lambda v: places[v]  # noqa: E731
-    G = {k: qbkey(f'tr_goal_{k}') for k in ('counter7', 'gaps41', 'gaps42', 'gaps43', 'gaps40', 'counter40', 'gaps44',
+    G = {k: qbkey(f'tr_goal_{k}') for k in ('gaps48', 'gaps49', 'counter7', 'gaps41', 'gaps42', 'gaps43', 'gaps40', 'counter40', 'gaps44',
                                            'gaps45', 'gaps46', 'gaps47')}
 
     def common(text, view, who, pro_node, restart_node, child=None, first=False, stage=False):
@@ -326,6 +340,65 @@ def main():
                          + ([('goal_success_Script', N('hw_dbg_won')), ('goal_deactivate_script', N('hw_dbg_deact'))] if os.environ.get('HW_DEBUG') else [])
                          + common(text, view, who, pro, restart, child, stage=version in (46, 47)))
 
+    # 0 the two shops: the barber, then the clothing store
+    shop_scripts, shop_goals = [], []
+    for v, text, view, who, child in (
+            (48, 'Change your look: go to the barber shop door and press \\b0', 'Change your look', 'Barber', 'gaps49'),
+            (49, 'Change your clothes: go to the clothing store door and press \\b0', 'Change your clothes',
+             'Store Clerk', 'counter7')):
+        shop_goals.append(goal_call('AddGoal_Gaps', [('version', I(v)), ('time', I(120)),
+                                                ('goal_flags', ('array', [N('got_1')])),
+                                                ('goal_start_script', N(f'hw_shop{v}_start')),
+                                                ('goal_success_Script', N(f'hw_shop{v}_stop')),
+                                                ('goal_deactivate_script', N(f'hw_shop{v}_stop'))] + common(
+            text, view, who, f'TRG_G_GAP{v - 30}_Pro', f'TRG_G_GAP{v - 30}_RestartNode', child, first=(v == 48))))
+        rpos, ryaw = places[f'TRG_G_GAP{v - 30}_RestartNode']
+        door = rpos + np.array([-np.sin(ryaw), 0, -np.cos(ryaw)]) * 50
+        shop_scripts += [
+            script(f'hw_shop{v}_start', [['skater', ':', 'Obj_SpawnScript', f'hw_shop{v}_poll']]),
+            # on the skater: near the door, show the prompt; Triangle there sets the pending step
+            # and leaves for CAS (spawned globally: changing level kills the skater's scripts)
+            script(f'hw_shop{v}_poll', [['<hw_near>', '=', 0],
+                                        ['while'],
+                                        ['Obj_GetPosition'],
+                                        ['<hw_d>', '=', bytes([0x0E, 0x2D]) + tok_name('Pos') + bytes([0x0A, qb2.VEC])
+                                         + struct.pack('<3f', *map(float, door)) + bytes([0x0F])],
+                                        ['if', bytes([0x0E, 0x0E, 0x2D]) + tok_name('hw_d') + bytes([0x08, 0x2D]) + tok_name('hw_d')
+                                         + bytes([0x0F, 0x12, qb2.INT]) + struct.pack('<i', SHOP_DOOR_RADIUS ** 2) + bytes([0x0F])],
+                                        ['if', bytes([0x0E]), '<hw_near>', '=', 0, bytes([0x0F])],
+                                        ['create_panel_message', 'id', '=', 'hw_shop_hint', 'text', '=',
+                                         "'Press \\b0 to go in", 'time', '=', 100000],
+                                        ['endif'],
+                                        ['<hw_near>', '=', 1],
+                                        ['if', 'Held', 'Triangle'],
+                                        ['kill_panel_message_if_it_exists', 'id', '=', 'hw_shop_hint'],
+                                        ['change', 'hw_shop_pending', '=', v],
+                                        ['spawnscript', 'hw_shop_go'],
+                                        [bytes([0x22])],
+                                        ['endif'],
+                                        ['else'],
+                                        ['if', bytes([0x0E]), '<hw_near>', '=', 1, bytes([0x0F])],
+                                        ['kill_panel_message_if_it_exists', 'id', '=', 'hw_shop_hint'],
+                                        ['endif'],
+                                        ['<hw_near>', '=', 0],
+                                        ['endif'],
+                                        ['wait', 1, 'gameframe'],
+                                        ['repeat']]),
+            script(f'hw_shop{v}_stop', [['skater', ':', 'Obj_KillSpawnedScript', 'Name', '=', f'hw_shop{v}_poll'],
+                                        ['kill_panel_message_if_it_exists', 'id', '=', 'hw_shop_hint']]),
+        ]
+    shop_scripts += [
+        # the pause menu's Edit Appearance: remembers this level, deactivates goals, loads CAS
+        script('hw_shop_go', [['wait', 2, 'gameframes'], ['pause_launch_level', 'level', '=', 'load_cas']]),
+        # back from CAS (the level reloads): the pending shop step is won
+        script('hw_shop_return', sum(([['if', bytes([0x0E]), 'hw_shop_pending', '=', v, bytes([0x0F])],
+                                       ['change', 'hw_shop_pending', '=', 0],
+                                       # a goal need not be active to be won (CGoal::Win); activating it
+                                       # would bring up the giver's intro box again
+                                       ['wait', 90, 'gameframes'],
+                                       ['GoalManager_WinGoal', 'Name', '=', tok_name(G[f'gaps{v}'])],
+                                       ['endif']] for v in (48, 49)), [])),
+    ]
     # 4 sponsor challenge
     goals.append(combo_goal(43, 1500, 'Sponsor challenge: land a 1,500 point combo',
                             'Go to the skateshop, win a sponsor challenge', 'Mindy',
@@ -355,7 +428,7 @@ def main():
                                 'TRG_G_GAP20_Pro', 'TRG_G_GAP20_RestartNode', child,
                                 post=('hw_dino_fall' if v == 47 else None)))
 
-    helpers = b''.join(combo_watchers + [
+    helpers = b''.join(shop_scripts + combo_watchers + [
         # Ben: polled on the skater (event handlers for skater events never fired): while in a combo
         # that has a Kickflip in it, being within 180 inches of Ben wins. Ben's position is fixed.
         script('hw_ben_start', [['skater', ':', 'Obj_SpawnScript', 'hw_ben_poll']]),
@@ -415,6 +488,9 @@ def main():
         script('hw_dbg_fail', [['create_panel_message', 'id', '=', 'hw_dbg6', 'text', '=', "'FAILED"]]),
         script('hw_dbg_won', [['create_panel_message', 'id', '=', 'hw_dbg3', 'text', '=', "'GOAL WON"]]),
         script('hw_debug_start_goal', [['wait', 120, 'gameframes'],
+                                       ['if', 'GoalManager_HasWonGoal', 'Name', '=', tok_name(qbkey('tr_goal_' + os.environ.get('HW_START_GOAL', 'none')))],
+                                       [bytes([0x29])],
+                                       ['endif'],
                                        ['GoalManager_UnlockGoal', 'Name', '=', tok_name(qbkey('tr_goal_' + os.environ.get('HW_START_GOAL', 'none')))],
                                        ['GoalManager_ActivateGoal', 'Name', '=', tok_name(qbkey('tr_goal_' + os.environ.get('HW_START_GOAL', 'none')))]]),
         # red rope rail trigger, in the pattern of training's grind goal
@@ -533,7 +609,7 @@ def main():
     fields += [(qbkey(k) if k else None, v) for k, v in common(
         'Switch to walk and back to skating 3 times: get off your board (\\be), then Caveman (\\be) back on',
         'Learn from the Hollywood skaters', 'Hollywood Skater', 'TRG_G_COUNTER7_Pro', 'TRG_G_COUNTER7_RestartNode',
-        'gaps41', first=True)]
+        'gaps41')]
     edits.append((call_at + 5, st_end, qb2.encode_value(('struct', fields))))
     for slot, body in zip(SLOTS, goals):
         s, e = sc[slot]
@@ -542,6 +618,8 @@ def main():
     for slot in spare:
         s, e = sc[slot]
         lines = []
+        if slot == spare[1]:
+            lines = [['spawnscript', 'hw_shop_return']]
         if os.environ.get('HW_DEBUG') and slot == spare[0]:
             lines = [] if os.environ.get('HW_NOPOS') else [['spawnscript', 'hw_debug_pos']]
             if os.environ.get('HW_SPAWN'):
@@ -559,6 +637,8 @@ def main():
                 'Grind (\\b0) the red ropes', 'Learn from the Hollywood skaters', 'Hollywood Skater',
                 'TRG_G_COUNTER7_Pro', 'TRG_G_GAP7_RestartNode', 'gaps42', stage=True))
             body = body.replace(bytes([qb2.NEWLINE, 0x24]), red_ropes + bytes([0x24]), 1)
+        if slot in spare[-4:-2]:  # the two shop goals
+            body = body.replace(bytes([qb2.NEWLINE, 0x24]), shop_goals[spare.index(slot) - len(spare) + 4] + bytes([0x24]), 1)
         if slot == spare[-2]:
             # caveman lesson part 3 (THAW's z_ho_goal_gaps4): off the board, Caveman back on, jump and
             # grind the red ropes, all in one combo; winning it is THAW's "learned Caveman" moment
@@ -596,6 +676,9 @@ def main():
     ch1 = chapters[1][0][1]
     ch1[:] = [(k, v) for k, v in ch1 if k != 0x84546ab7]  # chapter 1's cutscene list
     ch = ch[:p] + qb2.encode_value(chapters) + ch[cend:]
+    # the shop step pending across the trip to CAS (this file stays loaded when the level unloads)
+    end_tok = next(p for p, t, pl in qb2.tokens(ch) if t in (0x2B, 0x00))  # before the name table
+    ch = ch[:end_tok] + assemble_line(['hw_shop_pending', '=', 0]) + ch[end_tok:]
     list(qb2.tokens(ch))
     open(os.path.join(out, 'chapter_info.qb'), 'wb').write(ch)
     # build on the HUD port's qb_scripts.pre when there is one, so both changes survive
