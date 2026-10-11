@@ -1,6 +1,7 @@
 """Build a PSP UMD-style ISO from an unpacked game tree.
 
   mkumd.py <game dir> <out.iso> [--like <original.iso>] [--compact-wad <PSP_GAME/USRDIR/datap>]
+      [--file <iso path>=<source> ...]
 
 The layout follows the shipped UMD images: ISO9660 level 1 with plain names (no ;1 version), system
 and application id "PSP GAME", a blank volume id, every file starting on a 16-sector (32 KB)
@@ -251,8 +252,13 @@ def main():
         i = args.index('--compact-wad')
         compact = args[i + 1]
         del args[i:i + 2]
-    game, out = args
     overrides = {}
+    while '--file' in args:  # --file /PSP_GAME/USRDIR/Movies/atvi.pmf=<source>: one file from elsewhere
+        i = args.index('--file')
+        k, v = args[i + 1].split('=', 1)
+        overrides[k] = v
+        del args[i:i + 2]
+    game, out = args
     tmp = None
     if compact:
         tmp = tempfile.mkdtemp(prefix='mkumd_', dir=os.path.dirname(os.path.abspath(out)))

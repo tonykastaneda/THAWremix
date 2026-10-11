@@ -101,7 +101,11 @@ def encode_video(src, out, bitrate, seconds=None, start=None):
            'scale=480:272:force_original_aspect_ratio=decrease,pad=480:272:(ow-iw)/2:(oh-ih)/2,setsar=1',
            '-r', '30000/1001', '-c:v', 'libx264', '-profile:v', 'main', '-level', '2.1', '-pix_fmt', 'yuv420p',
            '-b:v', bitrate, '-maxrate', bitrate, '-bufsize', '1000k',
-           '-x264-params', 'aud=1:bframes=1:b-pyramid=0:ref=2:keyint=30:min-keyint=15:weightp=0:8x8dct=0',
+           # as Sony's encodes in Remix's own movies: no B-frames (picture order type 2), one
+           # reference frame, no weighted prediction, and HRD buffering period / picture timing
+           # SEI with pic_struct on every frame; the PSP's hardware decoder rejects the rest
+           '-x264-params', 'aud=1:bframes=0:ref=1:weightp=0:weightb=0:8x8dct=0:keyint=30:min-keyint=1:'
+                           'nal-hrd=vbr:pic-struct=1:slices=1',
            '-video_track_timescale', '90000', out + '.mp4']
     at = cmd.index('-i')
     cmd[at:at] = (['-ss', str(start)] if start else []) + (['-t', str(seconds)] if seconds else [])

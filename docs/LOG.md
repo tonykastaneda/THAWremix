@@ -604,3 +604,24 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   level) 6.2k draws and 60k vertices per frame typical, 21k / 173k peak; Hollywood 10.2k / 133k
   typical, 20.4k / 357k peak. Both hold 30 fps in PPSSPP, which does not time the GE; Hollywood
   asks about twice stock's vertex load.
+
+### First real-PSP boot: black screen
+
+- Report (PSP 3000, custom firmware): game chime, 40 s of black, then the console switches off.
+  The ISO itself loads (the executable runs); the first thing the game does is play its launch
+  videos, which are ours.
+- Our H.264 differed from Sony's encodes in Remix's own movies: B-frames with weighted
+  bi-prediction, 2 reference frames, picture order type 0, and no HRD / pic_struct SEI. Sony's:
+  I and P only (picture order type 2), 1 reference frame, nal_hrd and pic_struct present, buffering
+  period and picture timing SEI on every frame. pmfmux now asks x264 for exactly that
+  (bframes=0, ref=1, weightp/weightb off, nal-hrd=vbr, pic-struct, one slice); all eight movies are
+  re-encoded (`work/vid2`, copied into the tree).
+- Still unverified: the audio is atracdenc's ATRAC3plus at 352.8 kbps (2048-byte frames), where
+  Remix's movies use 560-byte frames (~96 kbps).
+- PPSSPP with PSPModel 0 (PSP-1000 memory) logs a BREAK two seconds into boot for both the
+  original and the modified ISO, then plays on; not the cause.
+- Two ISOs for the hardware test: A (all changes, re-encoded videos) and B (all changes, Remix's
+  original videos, via mkumd `--file`). If A fails and B boots, the videos are still the problem
+  (next: the audio); if both fail, it is something else in the data.
+- Git Bash rewrites arguments that start with `/` into Windows paths; use MSYS_NO_PATHCONV=1 when
+  passing `--file /PSP_GAME/...`.
