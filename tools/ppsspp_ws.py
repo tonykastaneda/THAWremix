@@ -108,6 +108,23 @@ def press(ws, names, ms=120):
     buttons(ws, names, False)
 
 
+def shot_display(ws, path):
+    """What the window shows (movie frames included), read through the debugger."""
+    from PIL import Image
+    ws.call({'event': 'cpu.stepping'})
+    try:
+        m = ws.call({'event': 'gpu.buffer.screenshot', 'type': 'uri'}, timeout=30)
+    finally:
+        ws.call({'event': 'cpu.resume'})
+    im = Image.open(io.BytesIO(base64.b64decode(m['uri'].split(',', 1)[1]))).convert('RGB')
+    w, h = im.size
+    sc = min(w / 480, h / 272)
+    pw, ph = int(480 * sc), int(272 * sc)
+    x0, y0 = (w - pw) // 2, (h - ph) // 2
+    im.crop((x0, y0, x0 + pw, y0 + ph)).resize((480, 272), Image.Resampling.BOX).save(path)
+    return path
+
+
 def shot(ws, path):
     """The emulated PSP framebuffer, read through the debugger (the window stays minimized)."""
     from PIL import Image
@@ -190,9 +207,10 @@ def start(game):
     si.cb = ctypes.sizeof(SI)
     si.lpDesktop = DESKTOP
     si.dwFlags = 0x1  # STARTF_USESHOWWINDOW
-    si.wShowWindow = 7  # SW_SHOWMINNOACTIVE
+    si.wShowWindow = 4  # SW_SHOWNOACTIVATE; on the hidden desktop it is never drawn on the user's screen
     pi = PI()
-    cmd = ctypes.create_unicode_buffer(f'"{EXE}" "{game}"')
+    log = os.path.join(os.path.dirname(EXE), 'ppsspp.log')
+    cmd = ctypes.create_unicode_buffer(f'"{EXE}" "{game}" --log="{log}"')
     if not k.CreateProcessW(None, cmd, None, None, False, NO_WINDOW, None, os.path.dirname(EXE),
                             ctypes.byref(si), ctypes.byref(pi)):
         raise OSError(f'CreateProcess failed: {k.GetLastError()}')
@@ -217,6 +235,8 @@ def run_seq(ws, steps):
             time.sleep(int(rest) / 1000)
         elif kind == 'shot':
             print(shot(ws, rest))
+        elif kind == 'dshot':
+            print(shot_display(ws, rest))
         elif kind == 'stick':
             x, y, ms = rest.split(':')
             ws.call({'event': 'input.analog.send', 'stick': 'left', 'x': float(x), 'y': float(y)})

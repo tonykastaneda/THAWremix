@@ -404,3 +404,25 @@ The user's own PPSSPP and its settings are never touched.
 - Launch videos: Remix's `Movies\*.pmf` are PSMF (H.264 Main 4.2... 480x272 plus ATRAC3plus audio in
   private stream 1). ffmpeg reads them and THAW's Bink files but cannot write PSMF or encode
   ATRAC3plus, so THAW's videos are not in yet.
+
+### THAW videos as PSP movies (with ATRAC3plus audio)
+
+`tools/pmfmux.py <video> <out.pmf> [--start s] [--seconds s] [--vbitrate 700k]` writes PSMF from
+anything ffmpeg reads. Video: libx264 Main 2.1, 480x272, 29.97, access unit delimiters, B-frames,
+timestamps from an intermediate MP4 (raw H.264 has none). Audio: atracdenc 0.2.3
+(github.com/dcherednik/atracdenc, LGPL, Windows build in `bin/atracdenc`), ATRAC3plus 44.1 kHz
+stereo at its fixed 352.8 kbps (2048-byte frames, codec params 28 FF); each frame is preceded by
+0F D0 <params> 00 00 00 00, as in Remix's own movies (which use 560-byte frames, params 28 45).
+Container layout copied from the stock movies: 0x800 header from `atvi.pmf` with data size and end
+timestamp patched; 2048-byte sectors, each a pack header and one PES packet (stuffing bytes in the
+PES header or a padding packet fill a sector); audio packets start 00 00 <u16 offset of the first
+whole frame>; the system header goes in a sector of its own.
+
+Installed (originals in `work/orig_movies`): `atvi` (THAW Activision), `nslogo` (the Neversoft
+logo, first 11.5 s of THAW's intro), `intro` (the rest of THAW's intro), `demo_1`, `nsbails`,
+`credits`, `probail1`, `probail2`. Verified in the hidden test copy: the boot plays THAW's title,
+Activision and Neversoft videos (Remix's Shaba Games logo still plays between them). The test copy
+is muted, so the sound itself is not yet confirmed. Remix's in-game warning screen still says THUG2.
+
+Testing note: during movies the debugger's render target is stale; `dshot:` steps capture the
+window's display instead (the test copy runs unminimized but on the hidden desktop).
