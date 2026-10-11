@@ -144,15 +144,26 @@ def main():
     images = os.path.join(a.install, 'data', 'images')
     loose = {}
 
-    swap_sprites(pre('mainmenusprites.pre'), os.path.join(a.out, 'mainmenusprites.pre'),
-                 os.path.join(images, 'mainmenusprites'), None, loose)
-    swap_sprites(a.panelsprites or pre('panelsprites.pre'), os.path.join(a.out, 'panelsprites.pre'),
-                 os.path.join(images, 'panelsprites'), MENU_PANEL_SPRITES, loose)
+    # hardware bisection switches: THX_NO_SPRITES leaves Remix's menu sprites, THX_NO_MAP leaves out
+    # the pause map (its two new sprites, the load list change and the call)
+    no_sprites, no_map = bool(os.environ.get('THX_NO_SPRITES')), bool(os.environ.get('THX_NO_MAP'))
+    if no_sprites:
+        import shutil
+        shutil.copyfile(pre('mainmenusprites.pre'), os.path.join(a.out, 'mainmenusprites.pre'))
+        shutil.copyfile(a.panelsprites or pre('panelsprites.pre'), os.path.join(a.out, 'panelsprites.pre'))
+    else:
+        swap_sprites(pre('mainmenusprites.pre'), os.path.join(a.out, 'mainmenusprites.pre'),
+                     os.path.join(images, 'mainmenusprites'), None, loose)
+        swap_sprites(a.panelsprites or pre('panelsprites.pre'), os.path.join(a.out, 'panelsprites.pre'),
+                     os.path.join(images, 'panelsprites'), MENU_PANEL_SPRITES, loose)
 
     def patch_pre(src_pre, dst_pre, entry, sources):
         files = {n.lower(): (n, d) for n, k, d in qb2.read_pre(src_pre)[3]}
         name, d = files[entry.lower()]
-        code = qbc.compile_source(''.join(open(os.path.join(UI, s), encoding='utf-8').read() + '\n' for s in sources))
+        text = ''.join(open(os.path.join(UI, s), encoding='utf-8').read() + '\n' for s in sources)
+        if no_map:
+            text = text.replace('RunScriptOnScreenElement id = current_menu_anchor hw_pause_map', '')
+        code = qbc.compile_source(text)
         new = qbc.patch(d, code) if code else d
         for script_name, line in SUBMENU_VIEWS.get(entry.lower(), []):
             new = append_call(new, script_name, line)
@@ -179,14 +190,15 @@ def main():
     offset = (-265.0 + shift[0], -1395.0 + shift[2])  # THAW's Level_Z_HO map_offset (x, z)
     src = open(os.path.join(UI, 'pausemap.q'), encoding='utf-8').read().replace('MAP_OFFSET', '(%.4f, %.4f)' % offset)
     open(os.path.join(a.out, 'pausemap.q'), 'w', encoding='utf-8').write(src)
-    patch_pre(qbs, qbs, 'scripts\\game\\menu\\gamemenu_pause.qb', ['pause.q', os.path.abspath(os.path.join(a.out, 'pausemap.q'))])
+    patch_pre(qbs, qbs, 'scripts\\game\\menu\\gamemenu_pause.qb',
+              ['pause.q'] + ([] if no_map else [os.path.abspath(os.path.join(a.out, 'pausemap.q'))]))
     print(f'pause map offset {offset}')
 
     # the map and the arrow are new sprites: into panelsprites.pre and the permanent panel sprite
     # list (sprites.qb, 0xb5f55941, loaded with the pre at boot)
     psp = os.path.join(a.out, 'panelsprites.pre')
     new = []
-    for name, src_name in (('ho_level_map', 'ho_level_map'), ('Bike_arrow', 'bike_arrow')):
+    for name, src_name in () if no_map else (('ho_level_map', 'ho_level_map'), ('Bike_arrow', 'bike_arrow')):
         img, used = pspimg.read_wpc(open(os.path.join(images, 'panelsprites', f'{src_name}.img.wpc'), 'rb').read())
         h, w = img.shape[:2]
         W, H = 1 << (w - 1).bit_length(), 1 << (h - 1).bit_length()
@@ -194,14 +206,15 @@ def main():
         buf[:h, :w] = img
         data = pspimg.make_psp(buf, (min(used[0], W), min(used[1], H)), 0x12FC7C, 256 if name == 'ho_level_map' else 16)
         new.append((f'images\\PanelSprites\\{name}.img.psp', data))  # (no loose copy: not in datap)
-    qb2.append_to_pre(psp, psp, new)
+    if not no_map:
+        qb2.append_to_pre(psp, psp, new)
     files = {n.lower(): (n, d) for n, k, d in qb2.read_pre(qbs)[3]}
     name, sprites = files['scripts\\game\\menu\\sprites.qb']
     p = qb2.find_item(sprites, 0xB5F55941)
     arr, end = qb2.parse_value(sprites, p)
     while sprites[p] in (qb2.NEWLINE, 0x02):
         p += 1
-    arr[1].extend(('str', f'PanelSprites/{n}') for n in ('ho_level_map', 'Bike_arrow'))
+    arr[1].extend(('str', f'PanelSprites/{n}') for n in (() if no_map else ('ho_level_map', 'Bike_arrow')))
     sprites = sprites[:p] + qb2.encode_value(arr) + sprites[end:]
     list(qb2.tokens(sprites))
     qb2.replace_in_pre(qbs, qbs, name, sprites)

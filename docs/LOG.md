@@ -649,3 +649,12 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   load screens, videos, icons; L2 + HUD; L3 + Hollywood and story; L4 everything. L4's archive
   entries are byte-identical to the test tree's, and it boots in PPSSPP to the menu, Hollywood and
   the pause menu.
+- Hardware results with the fixed builder: L4 shows THAW's title and disclaimer (`legal.tga`), then
+  crashes; L1 (screens, videos, icons on stock) boots and plays our videos and loading screens;
+  L4-SV (everything but stock videos) crashes at the same place. So the videos, title and load
+  screens are fine on hardware; the crash is in data L2-L4 add, loaded at boot.
+- The .pre size field (0x0C) of our files sits within the stock files' range against an estimate
+  of entry headers plus 16-aligned data, so it is not obviously short.
+- Bisection switches in `tools/thawui.py`: THX_NO_SPRITES (Remix's menu sprites kept) and
+  THX_NO_MAP (no pause map: no appended sprites, no load list change, no call). `work/mklayers.py`
+  builds L4-NOMAP and L4-NOSPR from those outputs; both boot in PPSSPP.
