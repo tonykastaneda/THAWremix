@@ -285,6 +285,7 @@ def read_nodes(qb_path, zone, flags):
     """Returns (pieces {checksum: (created, placement or None)}, restarts [(name, pos, angles)]).
     placement is (pos, angles) for LevelObjects, which are modelled at the origin."""
     pieces, restarts = {}, []
+    read_nodes.variables = {}
     for d in expanded_nodes(qb_path, zone):
         cls = d.get('Class')
         fl = [x for x in d.get('_flags', []) if isinstance(x, str)]
@@ -293,6 +294,8 @@ def read_nodes(qb_path, zone, flags):
         if cls in ('$LevelGeometry', '$LevelObject') and isinstance(d.get('Name'), str):
             place = (d['Pos'], d.get('Angles', [0, 0, 0])) if cls == '$LevelObject' and 'Pos' in d else None
             pieces[_key(d['Name'])] = (created, place)
+            if isinstance(var, str):
+                read_nodes.variables[_key(d['Name'])] = var[1:]
         elif cls == '$Restart' and 'Pos' in d:
             restarts.append((d.get('RestartName', ''), d['Pos'], d.get('Angles', [0, 0, 0])))
     return pieces, restarts
@@ -304,8 +307,10 @@ def _key(name):
     return int(s, 16) if s.startswith('0x') else qbkey(s)
 
 
-def load_zone(install, zone):
+def load_zone(install, zone, flag_overrides=None, hidden_flags=()):
     """Pieces present at level start, with LevelObjects moved into place.
+    flag_overrides {node flag name: value} replace the free-skate values; pieces created from a flag
+    in hidden_flags are kept (for scripts to create later) and listed in load_zone.hidden.
     Returns (materials, meshes, textures, pieces, restarts)."""
     if not qb.NAMES:
         qb.load_names(os.path.join(os.path.dirname(__file__), '..', 'extracted', 'dbg'))
@@ -318,7 +323,13 @@ def load_zone(install, zone):
     qbe = next(e for e in entries if (e['name'] or '').lower().endswith(f'\\{zone}.qb.wpc'))
     tmp = os.path.join(os.environ.get('TEMP', '.'), f'{zone}_nodes.qb')
     open(tmp, 'wb').write(get(qbe))
-    pieces, restarts = read_nodes(tmp, zone, node_flags(install))
+    flags = node_flags(install)
+    for name, v in (flag_overrides or {}).items():
+        flags[qbkey(name)] = v
+    pieces, restarts = read_nodes(tmp, zone, flags)
+    load_zone.hidden = {k for k, var in read_nodes.variables.items() if var.lower() in {h.lower() for h in hidden_flags}}
+    for k in load_zone.hidden:
+        pieces[k] = (True, pieces[k][1])
     kept = []
     for m in meshes:
         p = pieces.get(m.sector)

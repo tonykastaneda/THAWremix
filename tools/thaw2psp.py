@@ -265,7 +265,7 @@ def split_strip(attr, s, max_edge):
         k = j
 
 
-def build_level(meshes, materials, textures, delta, max_side, tess_len=400, log=print, offset=None):
+def build_level(meshes, materials, textures, delta, max_side, tess_len=400, log=print, offset=None, hidden=()):
     tb = TexBlock(max_side)
     lists = [[GE_RET]]  # word 0: never selected explicitly
     mat_word = {}
@@ -376,7 +376,10 @@ def build_level(meshes, materials, textures, delta, max_side, tess_len=400, log=
     out += struct.pack('<I', GE_RET)
     out += struct.pack(f'<{len(texcmds)}I', *texcmds)
     out += struct.pack(f'<{len(box_name)}I', *box_name)
-    out += bytes(box_flags_len(len(box_name)))
+    # box flag bit 0: not drawn (the loader at 0005f79c skips such boxes); pieces that story scripts
+    # create later start this way
+    flags = bytes(1 if k in hidden else 0 for k in box_name)
+    out += flags + bytes(box_flags_len(len(box_name)) - len(box_name))
     out += struct.pack(f'<{len(prims)}H', *prims)
     return bytes(out)
 
@@ -387,12 +390,17 @@ def box_flags_len(n):
 
 # ---------------------------------------------------------------- collision
 
-def convert_col(d, delta16, disabled, moves=None):
+def convert_col(d, delta16, disabled, moves=None, start_killed=()):
     """THAW v10 collision (0x50-byte header) -> Remix v10 (0x20-byte header), shifted by delta16
     (sixteenths of an inch per axis); faces of objects in `disabled` become non-collidable.
     `moves` {object checksum: sixteenths} shifts single objects further (LevelObjects, which are
     modelled at the origin): their box, float vertices and their own BSP subtree."""
     moves = moves or {}
+    # objects scripts create later start killed and non-collidable (mSD_NON_COLLIDABLE | mSD_KILLED)
+    for i in range(struct.unpack_from('<i', d, 4)[0]):
+        o = 0x50 + i * 0x40
+        if struct.unpack_from('<I', d, o)[0] in start_killed:
+            d = d[:o + 4] + struct.pack('<H', struct.unpack_from('<H', d, o + 4)[0] | 0x0006) + d[o + 6:]
     ver, nobj, tverts, tlf, tsf, tlv, tsv, _ = struct.unpack_from('<8i', d, 0)
     assert ver == 10
     out = bytearray(d[:0x20] + d[0x50:])
@@ -515,7 +523,7 @@ def append_col_objects(d, objs):
 
 # ---------------------------------------------------------------- nodes
 
-def build_qb(target_qb, rails, delta, sink=-100000.0):
+def build_qb(target_qb, rails, delta, sink=-100000.0, geometry=()):
     """The target level's .qb with its node array rewritten: its own rail and climbing nodes are
     sunk far below the map (indices, names and links stay, so its scripts still resolve), and the
     zone's rail nodes are appended, shifted, with links renumbered."""
@@ -559,8 +567,35 @@ def build_qb(target_qb, rails, delta, sink=-100000.0):
         if links:
             fields.append((qbkey('Links'), ('array', [('int', index[l]) for l in links])))
         nodes.append(('struct', fields))
+    # LevelGeometry nodes for pieces story scripts kill or create by name: (name key, pos, created)
+    for name, pos, created in geometry:
+        fields = [(qbkey('Pos'), ('vec', tuple(float(pos[k] + delta[k]) for k in range(3)))),
+                  (qbkey('Angles'), ('vec', (0.0, 0.0, 0.0))),
+                  (qbkey('Name'), ('name', name)),
+                  (qbkey('Class'), ('name', qbkey('LevelGeometry'))),
+                  (qbkey('CollisionMode'), ('name', qbkey('Geometry')))]
+        if created:
+            fields.append((None, ('name', qbkey('CreatedAtStart'))))
+        nodes.append(('struct', fields))
     out = d[:start] + qb2.encode_value(arr) + d[end:]
     return out, sunk, len(rails)
+
+
+# story-start state per zone: THAW's free-skate node flags show the world after the story; these
+# put pieces back the way the story starts. 'hidden' pieces are built in but start hidden, for the
+# story scripts to create.
+STORY_START = {
+    'z_ho': {
+        'flags': {'NODEFLAG_Z_HO_DINO_BEFORE': 1, 'NODEFLAG_Z_HO_DINO_POOL_BEFORE': 1,
+                  'NODEFLAG_Z_HO_DINO_AFTER': 0, 'NODEFLAG_Z_HO_DINO_BLDG_AFTER': 0, 'NODEFLAG_Z_HO_DINO_HEAD': 0},
+        'hidden': ('NODEFLAG_Z_HO_DINO_AFTER', 'NODEFLAG_Z_HO_DINO_BLDG_AFTER', 'NODEFLAG_Z_HO_DINO_HEAD'),
+        # the dinosaur head: standing pieces, then the fallen ones (story scripts swap them)
+        'swap': ('Z_HO_HO_Before_dino_sign', 'Z_HO_HO_Before_Dino01', 'Z_HO_NightOn_03_HO_Before_Dino01_eyes',
+                 'Z_HO_HO_Before_dino_bldg', 'Z_HO_HO_Before_dino_roof_pool',
+                 'Z_HO_HO_After_dino_bldg', 'Z_HO_HO_After_dino_sign', 'Z_HO_HO_After_Dino01',
+                 'Z_HO_HO_After_DinoHead'),
+    },
+}
 
 
 # ---------------------------------------------------------------- main
@@ -600,7 +635,11 @@ def main():
     ap.add_argument('--pre', help="target level's scripts .pre (rebuilt holding the new .qb)")
     ap.add_argument('--pre-entry', help=r'path of the .qb inside the .pre, e.g. levels\TR\TR.qb')
     a = ap.parse_args()
-    materials, meshes, textures, pieces, restarts = thawscene.load_zone(a.install, a.zone)
+    story = STORY_START.get(a.zone, {})
+    materials, meshes, textures, pieces, restarts = thawscene.load_zone(
+        a.install, a.zone, story.get('flags'), story.get('hidden', ()))
+    hidden = thawscene.load_zone.hidden
+    print(f'story start: {len(hidden)} pieces built in hidden')
     p1 = next(r for r in restarts if r[0] == 'P1: Restart')
     delta16 = [int(round((t - s) * 16)) for t, s in zip(a.at, p1[1])]
     delta = np.array(delta16) / 16.0
@@ -615,7 +654,7 @@ def main():
         textures = {**ptex, **textures}
         print(f'props: {len(pm)} meshes, {len(prop_cols)} collision objects')
     os.makedirs(a.outdir, exist_ok=True)
-    lvl = build_level(meshes, materials, textures, delta, a.tex, a.tess)
+    lvl = build_level(meshes, materials, textures, delta, a.tex, a.tess, hidden=hidden)
     open(os.path.join(a.outdir, f'{a.name}.psp_level'), 'wb').write(lvl)
     print(f'{a.name}.psp_level {len(lvl)} bytes')
 
@@ -626,7 +665,7 @@ def main():
     moves = {k: [int(round(c * 16)) for c in place[0]] for k, (created, place) in pieces.items()
              if created and place and max(abs(x) for x in place[1]) < 0.05}
     disabled = {k for k, (created, place) in pieces.items() if not created or (place and k not in moves)}
-    col = convert_col(blob[ce['offset']:ce['offset'] + ce['size']], delta16, disabled, moves)
+    col = convert_col(blob[ce['offset']:ce['offset'] + ce['size']], delta16, disabled, moves, start_killed=hidden)
     if prop_cols:
         col = append_col_objects(col, [dict(o, verts=o['verts'] + delta) for o in prop_cols])
     open(os.path.join(a.outdir, f'{a.name}.col.ps2'), 'wb').write(col)
@@ -635,7 +674,13 @@ def main():
     if a.qb:
         import qb2
         rails = thawscene.load_rails(a.install, a.zone)
-        qbdata, sunk, added = build_qb(open(a.qb, 'rb').read(), rails, delta)
+        swap = story.get('swap', ())
+        tn = {thawscene._key(n['Name']): n for n in thawscene.expanded_nodes(
+            os.path.join(os.environ.get('TEMP', '.'), f'{a.zone}_nodes.qb'), a.zone) if isinstance(n.get('Name'), str)}
+        geometry = [(qbkey(nm), tn[qbkey(nm)].get('Pos', [0, 0, 0]), qbkey(nm) not in hidden)
+                    for nm in swap if qbkey(nm) in tn]
+        qbdata, sunk, added = build_qb(open(a.qb, 'rb').read(), rails, delta, geometry=geometry)
+        print(f'{len(geometry)} story geometry nodes added')
         open(os.path.join(a.outdir, f'{a.name}.qb'), 'wb').write(qbdata)
         print(f'{a.name}.qb {len(qbdata)} bytes: {sunk} own rail/climb nodes sunk, {added} rail nodes added')
         if a.pre:

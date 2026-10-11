@@ -58,7 +58,7 @@ PLACES = [
     ('TRG_G_GAP5_Pro', ('Z_HO_TRG_G_Gaps5_RestartNode', (60, 0, 60))),  # the punk
     ('TRG_G_GAP5_RestartNode', 'Z_HO_TRG_G_Gaps5_RestartNode'),
     ('TRG_G_GAP20_Pro', 'Z_HO_TRG_G_HIGHCOMBO_PRO'),  # Mindy at the wool protest
-    ('TRG_G_GAP20_RestartNode', ('Z_HO_TRG_G_HIGHCOMBO_PRO', (-250, 0, 0))),
+    ('TRG_G_GAP20_RestartNode', ('Z_HO_TRG_G_HIGHCOMBO_RestartNode', (0, 0, 0), -1.5708)),  # THAW's start, rolling
 ]
 
 
@@ -112,7 +112,8 @@ def combo_watcher(prefix, goal, score):
     in_combo = ['SkaterCurrentScorePotGreaterThan', 0]
     dbg = (lambda t: [['create_panel_message', 'id', '=', 'hw_dbg7', 'text', '=', "'" + t]]) if os.environ.get('HW_DEBUG') else (lambda t: [])
     return b''.join([
-        script(f'{prefix}_start', [['skater', ':', 'Obj_SpawnScript', f'{prefix}_poll']]),
+        script(f'{prefix}_start', [['skater', ':', 'Obj_SpawnScript', f'{prefix}_poll']]
+                + ([['spawnscript', 'hw_debug_teleport']] if os.environ.get('HW_DEBUG') and os.environ.get('HW_TP_ON_START') else [])),
         script(f'{prefix}_poll', [['<hw_in_combo>', '=', 0],
                                   ['while'],
                                   ['if'] + in_combo,
@@ -285,20 +286,23 @@ def main():
     G = {k: qbkey(f'tr_goal_{k}') for k in ('counter7', 'gaps41', 'gaps42', 'gaps43', 'gaps40', 'counter40', 'gaps44',
                                            'gaps45', 'gaps46', 'gaps47')}
 
-    def common(text, view, who, pro_node, restart_node, child=None, first=False):
+    def common(text, view, who, pro_node, restart_node, child=None, first=False, stage=False):
         pos, yaw = ped(pro_node)
         f = [('goal_text', S(text)), ('view_goals_text', S(view)), ('goal_description', S(text)),
              ('skater', N('Custom')), ('Pro', S(who)), ('full_name', S(who)),
              ('Trigger_Obj_ID', N(pro_node)), ('restart_node', N(restart_node)),
              ('start_cam_anims', cam_to(pos, yaw))]
-        if not first and not os.environ.get('HW_UNLOCK_ALL'):  # testing aid: every goal open at once
+        # stages (started by the engine when the goal before wins) must not be locked, or the
+        # engine's ActivateGoal on them does nothing; Remix's own staged goals leave the flag off
+        if not first and not stage and not os.environ.get('HW_UNLOCK_ALL'):  # testing aid: every goal open at once
             f.append(FLAG('Unlocked_By_Another'))
         if child:
-            # the caveman lesson's parts are stages of one goal (THAW chains them with child too):
+            # the caveman lesson's parts and the wool protest's three combos are stages of one goal
+            # (THAW chains them with child too):
             # winning a stage starts the next at once. Every other link is a reward_goal: a real
             # win (only a goal without a child is ever marked won) that unlocks the next goal,
             # whose giver you then go and talk to.
-            f.append(('child' if child in ('gaps41', 'gaps42') else 'reward_goal', N(G[child])))
+            f.append(('child' if child in ('gaps41', 'gaps42', 'gaps46', 'gaps47') else 'reward_goal', N(G[child])))
         return f
 
     goals = []
@@ -306,7 +310,7 @@ def main():
     # testing aid: HW_COMBO_SCORE=100 lowers every combo target so automated play can reach them
     test_score = int(os.environ.get('HW_COMBO_SCORE', 0))
 
-    def combo_goal(version, score, text, view, who, pro, restart, child):
+    def combo_goal(version, score, text, view, who, pro, restart, child, post=None):
         """A landed combo of at least `score` wins (Remix's own high-combo goals are silent area
         challenges that deactivate when a combo lands, so they cannot be given by a ped)."""
         key = f'gaps{version}'
@@ -317,8 +321,10 @@ def main():
                                           ('goal_start_script', N(f'hw_combo{version}_start')),
                                           ('goal_success_Script', N(f'hw_combo{version}_stop')),
                                           ('goal_deactivate_script', N(f'hw_combo{version}_stop'))]
+                         # goal_success runs goal_outro_script once the goal is won
+                         + ([('goal_outro_script', N(post))] if post else [])
                          + ([('goal_success_Script', N('hw_dbg_won')), ('goal_deactivate_script', N('hw_dbg_deact'))] if os.environ.get('HW_DEBUG') else [])
-                         + common(text, view, who, pro, restart, child))
+                         + common(text, view, who, pro, restart, child, stage=version in (46, 47)))
 
     # 4 sponsor challenge
     goals.append(combo_goal(43, 1500, 'Sponsor challenge: land a 1,500 point combo',
@@ -346,7 +352,8 @@ def main():
     # 8 stop the wool protest (three stages; the third knocks down the dino head in THAW)
     for v, score, child in ((45, 2000, 'gaps46'), (46, 5000, 'gaps47'), (47, 10000, None)):
         goals.append(combo_goal(v, score, f'Land a {score:,} point combo', 'Stop the wool protest!', 'Mindy',
-                                'TRG_G_GAP20_Pro', 'TRG_G_GAP20_RestartNode', child))
+                                'TRG_G_GAP20_Pro', 'TRG_G_GAP20_RestartNode', child,
+                                post=('hw_dino_fall' if v == 47 else None)))
 
     helpers = b''.join(combo_watchers + [
         # Ben: polled on the skater (event handlers for skater events never fired): while in a combo
@@ -444,6 +451,41 @@ def main():
                                 ['repeat']]),
         script('hw_cave_stop', [['skater', ':', 'Obj_KillSpawnedScript', 'Name', '=', 'hw_cave_poll']]
                 + ([['spawnscript', 'hw_debug_teleport']] if os.environ.get('HW_DEBUG') and os.environ.get('HW_SPAWN') else [])),
+        # the protest won: the dinosaur head comes down (THAW swaps these pieces by node flag)
+        script('hw_dbg_chain', [['while'],
+                                ['<hw_s45>', '=', "'-"],
+                                ['if', 'GoalManager_GoalIsActive', 'Name', '=', tok_name(G['gaps45'])],
+                                ['<hw_s45>', '=', "'A"],
+                                ['endif'],
+                                ['if', 'GoalManager_HasWonGoal', 'Name', '=', tok_name(G['gaps45'])],
+                                ['<hw_s45>', '=', "'W"],
+                                ['endif'],
+                                ['<hw_s46>', '=', "'-"],
+                                ['if', 'GoalManager_GoalIsActive', 'Name', '=', tok_name(G['gaps46'])],
+                                ['<hw_s46>', '=', "'A"],
+                                ['endif'],
+                                ['if', 'GoalManager_HasWonGoal', 'Name', '=', tok_name(G['gaps46'])],
+                                ['<hw_s46>', '=', "'W"],
+                                ['endif'],
+                                ['<hw_s47>', '=', "'-"],
+                                ['if', 'GoalManager_GoalIsActive', 'Name', '=', tok_name(G['gaps47'])],
+                                ['<hw_s47>', '=', "'A"],
+                                ['endif'],
+                                ['if', 'GoalManager_HasWonGoal', 'Name', '=', tok_name(G['gaps47'])],
+                                ['<hw_s47>', '=', "'W"],
+                                ['endif'],
+                                ['<hw_dn>', '=', "'gone"], ['if', 'IsAlive', 'Name', '=', 'Z_HO_HO_Before_Dino01'], ['<hw_dn>', '=', "'standing"], ['endif'],
+                                ['<hw_dh>', '=', "'-"], ['if', 'IsAlive', 'Name', '=', 'Z_HO_HO_After_DinoHead'], ['<hw_dh>', '=', "'head down"], ['endif'],
+                                ['FormatText', 'TextName', '=', 'hw_ct', "'protest %a %b %c dino %d %e", 'a', '=', '<hw_s45>', 'b', '=', '<hw_s46>', 'c', '=', '<hw_s47>', 'd', '=', '<hw_dn>', 'e', '=', '<hw_dh>'],
+                                ['create_panel_message', 'id', '=', 'hw_dbg9', 'text', '=', '<hw_ct>'],
+                                ['wait', 20, 'gameframes'], ['repeat']]),
+        script('hw_dino_fall', [['Kill', 'Name', '=', n] for n in ('Z_HO_HO_Before_dino_sign', 'Z_HO_HO_Before_Dino01',
+                                                                   'Z_HO_NightOn_03_HO_Before_Dino01_eyes',
+                                                                   'Z_HO_HO_Before_dino_bldg', 'Z_HO_HO_Before_dino_roof_pool')]
+                + [['create', 'Name', '=', n] for n in ('Z_HO_HO_After_dino_bldg', 'Z_HO_HO_After_dino_sign',
+                                                        'Z_HO_HO_After_Dino01', 'Z_HO_HO_After_DinoHead')]
+                + ([['create_panel_message', 'id', '=', 'hw_dbg8', 'text', '=', "'DINO HEAD FELL"]] if os.environ.get('HW_DEBUG') else [])
+                + ([['spawnscript', 'hw_debug_teleport']] if os.environ.get('HW_DEBUG') and os.environ.get('HW_TP_ON_DINO') else [])),
         # testing aid: the skater's position on screen twice a second
         script('hw_debug_teleport', [['wait', int(os.environ.get('HW_TP_WAIT', 90)), 'gameframes'],
                                      ['skater', ':', 'Obj_SetPosition', 'position', '=', bytes([qb2.VEC]) + struct.pack('<3f', *map(float, os.environ.get('HW_SPAWN', '0 0 0 0').split()[:3]))],
@@ -506,7 +548,7 @@ def main():
                 lines.append(['spawnscript', 'hw_debug_teleport'])
             lines.append(['spawnscript', 'hw_debug_peds'])
             if os.environ.get('HW_START_GOAL'):
-                lines.append(['spawnscript', 'hw_dbg_watch'])
+                lines.append(['spawnscript', 'hw_dbg_chain' if os.environ.get('HW_CHAIN') else 'hw_dbg_watch'])
             if os.environ.get('HW_START_GOAL'):  # testing aid: start one goal directly after load
                 lines.append(['spawnscript', 'hw_debug_start_goal'])
         body = script(slot, lines)[:-1]
@@ -515,7 +557,7 @@ def main():
             red_ropes = goal_call('AddGoal_Gaps', [('version', I(41)), ('time', I(120)),
                                                    ('goal_flags', ('array', [N('got_1')]))] + common(
                 'Grind (\\b0) the red ropes', 'Learn from the Hollywood skaters', 'Hollywood Skater',
-                'TRG_G_COUNTER7_Pro', 'TRG_G_GAP7_RestartNode', 'gaps42'))
+                'TRG_G_COUNTER7_Pro', 'TRG_G_GAP7_RestartNode', 'gaps42', stage=True))
             body = body.replace(bytes([qb2.NEWLINE, 0x24]), red_ropes + bytes([0x24]), 1)
         if slot == spare[-2]:
             # caveman lesson part 3 (THAW's z_ho_goal_gaps4): off the board, Caveman back on, jump and
@@ -524,7 +566,7 @@ def main():
                                               ('goal_flags', ('array', [N('got_1')]))] + common(
                 'Follow my line: get off your board (\\be), Caveman (\\be) back on, then jump and grind (\\b0) the red ropes in one combo',
                 'Learn from the Hollywood skaters', 'Hollywood Skater',
-                'TRG_G_COUNTER7_Pro', 'TRG_G_GAP7_RestartNode', 'gaps43'))
+                'TRG_G_COUNTER7_Pro', 'TRG_G_GAP7_RestartNode', 'gaps43', stage=True))
             body = body.replace(bytes([qb2.NEWLINE, 0x24]), line + bytes([0x24]), 1)
         edits.append((s, e, body))
     new = bytearray()

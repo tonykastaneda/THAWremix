@@ -426,3 +426,22 @@ is muted, so the sound itself is not yet confirmed. Remix's in-game warning scre
 
 Testing note: during movies the debugger's render target is stale; `dshot:` steps capture the
 window's display instead (the test copy runs unminimized but on the hidden desktop).
+
+### Stop the wool protest and the dinosaur head
+
+- The three protest combos (2,000 / 5,000 / 10,000, from Mindy at THAW's `HIGHCOMBO_RestartNode` on
+  the roof) are stages linked by `child`, as in THAW. Stage goals must NOT carry
+  `Unlocked_By_Another`: the engine's ActivateGoal on a locked child does nothing (Remix's own
+  staged goals leave it off). The same fix applies to caveman parts 2 and 3.
+- Remix has no `goal_post_success_script`; `goal_success` runs `goal_outro_script`. The last stage's
+  outro (`hw_dino_fall`) kills the standing dinosaur pieces and creates the fallen ones.
+- Story start state (`STORY_START` in `thaw2psp.py`): THAW's free-skate node flags show the world
+  after the story, so `NODEFLAG_Z_HO_DINO_BEFORE`/`POOL_BEFORE` are forced on and the DINO_AFTER,
+  BLDG_AFTER and HEAD pieces are built in hidden: box flag bit 0 (not drawn) and collision objects
+  flagged killed and non-collidable. `build_qb` adds LevelGeometry nodes for the nine dino pieces
+  so scripts can kill and create them by name. Box flags turn out to be the per-piece visibility
+  `Kill`/`create` drive, keyed by the box name (piece checksum).
+- Verified in the hidden test copy: all three stages chain and read as won; the readout shows the
+  standing dino gone and the fallen head created; from the same roof spot the red dinosaur stands
+  beside the skater before the win and is gone after it. Not yet checked: the fallen head on the
+  street visually, and that created pieces gain collision.
