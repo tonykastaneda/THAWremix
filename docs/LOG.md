@@ -512,3 +512,20 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   rewritten too, or their old indices read the new palette as noise.
 - A stray top-level word in a .qb (from a doubled endscript) hangs Remix at the main menu's loading
   screen; qbc now refuses top-level words that are not `name = value`.
+
+### THAW's alley behind the main menu
+
+- THAW's main menu background is its own zone, `z_mainmenu` (the back alley wall: poster collage,
+  stencils, the bench with the Neversoft sticker). Its main menu camera is `cam_main` in
+  `main_menu_camera_control`: Pos (42.6, 12.1, -983.8) and quaternion x, y, z (0.000138, 0.999862,
+  0.011832), looking along the rotated +Z. `tools/casbackdrop.py` renders the zone from there.
+- The render goes on a third backdrop panel in the menu room (host name `0xC6ED5A77`), 20 in in
+  front of a fixed camera that the main menu sets (`hw_main_menu_view` in `tools/ui/mainmenu.q`,
+  the CAS camera's position and target). The menu also hides the skater, and creates the panel
+  again in case CAS killed it.
+- Remix's main menu camera frames 72 degrees across (the 4:3 angle), not CAS's 88.18. A numbered
+  grid on the panel showed a uniform 1.4x zoom, so the panel and its UVs are built for 72 degrees.
+- `hw_cas_backdrop cas` (from `init_cas_skater_and_cam`) kills the alley panel; the shop branches
+  kill it with the rest of the room. Verified: the main menu shows the alley with no skater;
+  Create-A-Modes → CAS shows the normal room; Back returns to the alley; the barber trip still shows
+  the barber shop.

@@ -2,6 +2,8 @@
 ; z_mainmenu_scripts) instead of the spinning wheel. Remix's own setup and every item's handler stay
 ; (main_menu_exit with Remix's new_menu_script / change_gamemode, from its wheel list); THAW's order
 ; and wording, with Remix's Horse in THAW's 2-Player slot and WiFi Play in Online Play's.
+; No skater: THAW's alley (tools/casbackdrop.py renders it from THAW's main menu camera onto a
+; panel in the menu room, box 0xc6ed5a77) fills a fixed camera's view.
 ; Replaces create_main_menu in levels\mainmenu\mainmenu_scripts.qb.
 
 script create_main_menu
@@ -15,7 +17,6 @@ change in_options_menu = 0
 SetNetworkMode
 SetMemThreadSafe off
 main_menu_wait_until_all_clear
-spin_menu_skater_script Reset
 KillSpawnedScript Name = TemporarilyDisableInput
 spawnscript TemporarilyDisableInput params = { time = 400 }
 SetMenuPadMappings [ active
@@ -95,7 +96,7 @@ create_helper_text generic_helper_text_no_back
 FireEvent Type = focus target = current_menu
 UnPauseSkaters
 UnpauseMusicAndStreams
-spin_menu_camera_init
+hw_main_menu_view
 KillSpawnedScript Name = attract_mode_timer
 spawnscript attract_mode_timer
 SpawnSecondControllerCheck
@@ -106,4 +107,22 @@ change layer_infos_need_resetting = 0
 endif
 wait 5 gameframe
 kill_start_key_binding
+endscript
+
+; the camera the alley panel is built for (casbackdrop.cas_camera), the panel back if CAS killed it,
+; and the skater out of sight
+script hw_main_menu_view
+create Name = 0xc6ed5a77
+skater : hide
+KillSkaterCamAnim ALL
+SetActiveCamera id = skatercam0
+PlaySkaterCamAnim {
+skater = 0
+targetid = world
+targetOffset = (124.833, -18.74, 61.704)
+positionOffset = (144.833, -3.74, -18.296)
+play_hold
+frames = 1
+virtual_cam
+}
 endscript

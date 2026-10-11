@@ -184,7 +184,25 @@ CAS_SPOT = np.array([84.83287048339844, -63.73978042602539, 61.70404052734375])
 # a small room piece that the CAS camera never sees (always behind the backdrop wall); that piece's
 # own box is renamed, so killing the name hides the backdrop instead.
 BD_HOST = {'barber': 0x978F60B1, 'clothing': 0xE0885027}
+# THAW's main menu backdrop (the alley wall in z_mainmenu, seen from its main menu camera cam_main:
+# Pos and the x, y, z of its rotation quaternion, from main_menu_camera_control) on a panel 50 in in
+# front of the same camera; the main menu sets that camera and hides the skater
+MENU_HOST = 0xC6ED5A77
+MENU_HFOV = 72.0
+THAW_MENU_CAM = (np.array([42.6, 12.1, -983.8]), (0.000138, 0.999862, 0.011832))
 BD_SIZE = (512, 256)
+
+
+def thaw_menu_view(install):
+    """THAW's main menu backdrop, rendered from cam_main (its camera looks along +Z rotated by the
+    quaternion)."""
+    materials, meshes, textures, _, _ = thawscene.load_zone(install, 'z_mainmenu')
+    pos, (x, y, z) = THAW_MENU_CAM
+    w = np.sqrt(max(0.0, 1 - x * x - y * y - z * z))
+    q = np.array([x, y, z])
+    t = 2 * np.cross(q, [0.0, 0, 1])
+    fwd = np.array([0.0, 0, 1]) + w * t + np.cross(q, t)
+    return render(materials, meshes, textures, pos, pos + fwd * 100)
 
 
 def clut8(img):
@@ -204,11 +222,11 @@ def cas_camera():
     return CAS_SPOT + rot_y(CAS_CAM, np.pi), CAS_SPOT + rot_y(CAS_LOOK, np.pi)
 
 
-def project(p, cam, look):
-    """World points -> UV of the rendered image (the CAS camera's screen, 0..1)."""
+def project(p, cam, look, hfov=HFOV):
+    """World points -> UV of the rendered image (the camera's screen at hfov across, 0..1)."""
     R = camera(cam, look)
     v = (p - cam) @ R.T
-    fx = (W / 2) / np.tan(HFOV / 2)
+    fx = (W / 2) / np.tan(hfov / 2)
     return np.stack([(W / 2 + v[:, 0] / v[:, 2] * fx) / W, (H / 2 - v[:, 1] / v[:, 2] * fx) / H], 1)
 
 
@@ -221,17 +239,20 @@ def grid_strips(corner, a, b, n, m):
         yield np.array(pts)
 
 
-def backdrop_mesh():
-    """Strips (world points) the rendered shop is projected onto from the CAS camera: a wall 60 in
-    behind the skater filling the view, and a floor sheet just above the room's floor from in front
-    of the camera to that wall. From the camera the two read as the one picture."""
+def backdrop_mesh(wall_d=None, floor=True, hfov=HFOV):
+    """Strips (world points) a rendered image is projected onto from the CAS camera: a wall filling
+    the view (60 in behind the skater, or wall_d in front of the camera) and, for the shops, a floor
+    sheet just above the room's floor from in front of the camera to that wall. From the camera
+    they read as the one picture."""
     cam, look = cas_camera()
     r, u, f = camera(cam, look)
-    d = np.dot(CAS_SPOT - cam, f) + 60
-    hw = d * np.tan(HFOV / 2) * 1.05
+    d = np.dot(CAS_SPOT - cam, f) + 60 if wall_d is None else wall_d
+    hw = d * np.tan(hfov / 2) * (1.05 if floor else 1.0)
     hh = hw * H / W
     c = cam + f * d
     wall = list(grid_strips(c - r * hw + u * hh, r * 2 * hw, -u * 2 * hh, 4, 4))
+    if not floor:
+        return wall
     # floor: horizontal, at the skater's feet, from 40 in ahead of the camera to the wall's foot
     y = CAS_SPOT[1] + 0.5
     fh = np.array([f[0], 0, f[2]])
@@ -243,9 +264,10 @@ def backdrop_mesh():
     return wall + floor
 
 
-def inject(level, images):
-    """mainmenu.psp_level with a backdrop box per image {host checksum: PIL image} (see
-    backdrop_mesh and BD_HOST), its strips at the end of the opaque pass."""
+def inject(level, panels):
+    """mainmenu.psp_level with a backdrop box per panel (host checksum, PIL image, strips, the
+    camera's field of view across), the image projected from the CAS camera (see backdrop_mesh and BD_HOST), its strips at the end of
+    the opaque pass."""
     import psplevel
     from thaw2psp import ge, GE_RET, encode_strip, to_vertex_space, box_flags_len
     from pak import qbkey
@@ -268,8 +290,7 @@ def inject(level, images):
         assert st == 12
     tail, new_verts = [], bytearray()
     cam, look = cas_camera()
-    strips = backdrop_mesh()
-    for host, img in images.items():
+    for host, img, strips, hfov in panels:
         names = [0x48570000 + i if n == host else n for i, n in enumerate(names)]  # the host's own box
         pal, pix = clut8(img.resize(BD_SIZE, Image.Resampling.LANCZOS))
         clut_at = len(tex)
@@ -293,7 +314,7 @@ def inject(level, images):
         flags.append(0)  # shown at load; scripts kill the ones not wanted
         tail += [0, word]
         for pts in strips:
-            uv = np.clip(project(pts, cam, look), 0, 1)
+            uv = np.clip(project(pts, cam, look, hfov), 0, 1)
             rows = np.concatenate([to_vertex_space(pts) - off, uv, np.full((len(pts), 4), 128.0)], 1)
             for seq in (rows, rows[np.arange(len(rows)) ^ 1]):  # both windings
                 rec, wide = encode_strip(seq)
@@ -346,13 +367,30 @@ def main():
         from hostory import script, tok_name
         from pak import qbkey
         data = sys.argv[4]
-        images = {}
+        panels = []
         for shop, o in VIEW.items():
             mats, meshes, texs, cam, look = shop_view(install, shop, o)
             img = render(mats, meshes, texs, cam, look)
             img.save(os.path.join(out, f'{shop}.png'))
-            images[BD_HOST[shop]] = img
-        lvl = inject(os.path.join(data, 'levels', 'mainmenu', 'mainmenu.psp_level'), images)
+            panels.append((BD_HOST[shop], img, backdrop_mesh(), HFOV))
+        img = thaw_menu_view(install)
+        if os.environ.get('BD_GRID'):  # testing aid: a numbered grid, to see what the menu camera frames
+            from PIL import ImageDraw
+            img = Image.new('RGB', (W, H), (20, 20, 20))
+            dr = ImageDraw.Draw(img)
+            for gx in range(0, W + 1, 40):
+                dr.line([(gx, 0), (gx, H)], fill=(255, 255, 0) if gx % 120 == 0 else (90, 90, 90), width=2)
+            for gy in range(0, H + 1, 34):
+                dr.line([(0, gy), (W, gy)], fill=(0, 255, 255) if gy % 68 == 0 else (90, 90, 90), width=2)
+            for gx in range(0, W, 40):
+                for gy in range(0, H, 34):
+                    dr.text((gx + 4, gy + 4), f'{gx // 40},{gy // 34}', fill=(255, 255, 255))
+        img.save(os.path.join(out, 'mainmenu.png'))
+        # the main menu's camera frames 72 degrees across (the 4:3 angle, measured with a grid), not
+        # CAS's 88.18; the panel fills exactly that, close enough to sit in front of the room's walls
+        mh = np.radians(MENU_HFOV)
+        panels.append((MENU_HOST, img, backdrop_mesh(wall_d=20, floor=False, hfov=mh), mh))
+        lvl = inject(os.path.join(data, 'levels', 'mainmenu', 'mainmenu.psp_level'), panels)
         open(os.path.join(out, 'mainmenu.psp_level'), 'wb').write(lvl)
         print('mainmenu.psp_level', len(lvl), 'bytes')
         # CAS start shows the backdrop for the shop the story sent the skater from (hw_shop_pending,
@@ -365,8 +403,10 @@ def main():
                 if qb2.get(n, qbkey('Class')) in (('name', qbkey('LevelObject')), ('name', qbkey('LevelGeometry')))
                 and qb2.get(n, qbkey('Name')) and qb2.get(n, qbkey('Name'))[1] != qbkey('Box01')
                 and (None, ('name', qbkey('CreatedAtStart'))) in n[1]]
-        assert all(h in room for h in BD_HOST.values())
-        body = []
+        assert all(h in room for h in list(BD_HOST.values()) + [MENU_HOST])
+        # from CAS (init_cas_skater_and_cam passes cas) the main menu's panel goes; the main menu
+        # creates it again (create_main_menu)
+        body = [['if', 'GotParam', 'cas'], ['Kill', 'Name', '=', tok_name(MENU_HOST)], ['endif']]
         for v, shop in ((48, 'barber'), (49, 'clothing')):
             body += [['if', bytes([0x0E]), 'hw_shop_pending', '=', v, bytes([0x0F])]]
             body += [['Kill', 'Name', '=', tok_name(k)] for k in room if k != BD_HOST[shop]]
@@ -378,7 +418,7 @@ def main():
         cas = next(d for n, c, d in ents if n.lower() == r'levels\mainmenu\mainmenu_cas.qb')
         s, e = qbscripts.scripts(cas)[qbscripts.key('init_cas_skater_and_cam')]
         assert cas[e - 1] == 0x24
-        cas = cas[:e - 1] + tok_name('hw_cas_backdrop') + bytes([0x01]) + cas[e - 1:]
+        cas = cas[:e - 1] + tok_name('hw_cas_backdrop') + tok_name('cas') + bytes([0x01]) + cas[e - 1:]
         end_tok = next(p for p, t, pl in qb2.tokens(cas) if t in (0x2B, 0x00))
         cas = cas[:end_tok] + bytes([0x01]) + script('hw_cas_backdrop', body) +             script('hw_cas_backdrop_late', [['wait', 2, 'gameframes'], ['hw_cas_backdrop']]) + cas[end_tok:]
         list(qb2.tokens(cas))
