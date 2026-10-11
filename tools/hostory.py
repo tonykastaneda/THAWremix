@@ -46,6 +46,7 @@ ALL_SLOTS = [0x60bc5cc4, 0xb66ca5a7, 0xde875313, 0xb0ff23f9, 0x9ea0dcb7, 0xa8d92
 PLACES = [
     ('TRG_G_COUNTER7_Pro', 'Z_HO_TRG_G_COUNTER_PRO'),
     ('TRG_G_COUNTER7_RestartNode', 'Z_HO_TRG_G_COUNTER_RESTARTNode'),
+    ('TRG_G_GAP7_RestartNode', 'Z_HO_TRG_G_GAPS4_RESTARTNode'),  # red ropes lesson, facing the rope
     ('TRG_G_GAP16_Pro', ('Z_HO_TRG_G_Gaps31_RestartNode', (60, 0, 60))),  # Mindy at the skateshop
     ('TRG_G_GAP16_RestartNode', 'Z_HO_TRG_G_Gaps31_RestartNode'),
     ('TRG_G_GAP17_Pro', 'Z_HO_TRG_G_GAP2_PRO'),  # Ben Whofleck
@@ -135,7 +136,8 @@ def script(name, lines):
         elif head == 'while':
             body += bytes([0x20, qb2.NEWLINE])
         elif head == 'repeat':
-            body += bytes([0x21, qb2.NEWLINE])
+            # ['repeat'] loops forever; ['repeat', n] n times
+            body += bytes([0x21]) + (assemble_line(l[1:]) if len(l) > 1 else bytes([qb2.NEWLINE]))
         else:
             body += assemble_line(l)
     assert not stack, 'unclosed if'
@@ -206,6 +208,10 @@ def main():
                 elif k == qbkey('Angles'):
                     n[1][i] = (k, ('vec', (0.0, yaw, 0.0)))
             moved += 1
+        # the red rope rail THAW checks for caveman lesson part 2
+        if nm and nm[1] == qbkey('Z_HO_TRG_Rail_VelvetRope37'):
+            n[1].append((qbkey('TriggerScript'), ('name', qbkey('hw_rope_trigger'))))
+            print('red rope rail: trigger script set')
     # testing aid: HW_SPAWN="x y z yaw" puts the level's other restarts at one spot
     if os.environ.get('HW_SPAWN'):
         x, y, z, yaw = map(float, os.environ['HW_SPAWN'].split())
@@ -237,7 +243,7 @@ def main():
 
     # goals
     ped = lambda v: places[v]  # noqa: E731
-    G = {k: qbkey(f'tr_goal_{k}') for k in ('counter7', 'highcombo5', 'gaps40', 'counter40', 'highcombo6',
+    G = {k: qbkey(f'tr_goal_{k}') for k in ('counter7', 'gaps41', 'highcombo5', 'gaps40', 'counter40', 'highcombo6',
                                            'highcombo1', 'highcombo2', 'highcombo3')}
 
     def common(text, view, who, pro_node, restart_node, child=None, first=False):
@@ -275,7 +281,7 @@ def main():
         'Duane', 'TRG_G_COUNTER4_Pro', 'TRG_G_COUNTER4_RestartNode', 'highcombo6')))
     # 5 the punk
     goals.append(goal_call('AddGoal_HighCombo', [('version', I(6)), ('score', I(3000)), ('time', I(60))] + common(
-        'Beat my score: land a 3,000 point combo', 'Beat down the punk skater', 'Joe Skater',
+        'Beat my score: land a 3,000 point combo', 'Get your stuff back', 'Joe Skater',
         'TRG_G_GAP5_Pro', 'TRG_G_GAP5_RestartNode', 'highcombo1')))
     # 6-8 wool protest
     for v, score, child in ((1, 2000, 'highcombo2'), (2, 5000, 'highcombo3'), (3, 10000, None)):
@@ -299,6 +305,16 @@ def main():
         script('hw_ben_stop', [['skater', ':', 'Obj_KillSpawnedScript', 'Name', '=', 'hw_ben_listen'],
                                ['TRG_G_GAP17_Pro', ':', 'Obj_ClearExceptions']]),
         event_counter('hw_revert', 'SkaterEnterRevert', G['counter40']),
+        script('hw_debug_start_goal', [['wait', 120, 'gameframes'],
+                                       ['GoalManager_UnlockGoal', 'Name', '=', tok_name(qbkey('tr_goal_' + os.environ.get('HW_START_GOAL', 'none')))],
+                                       ['GoalManager_ActivateGoal', 'Name', '=', tok_name(qbkey('tr_goal_' + os.environ.get('HW_START_GOAL', 'none')))]]),
+        # red rope rail trigger, in the pattern of training's grind goal
+        script('hw_rope_trigger', [['GetTriggerArray', 'grind', 'off'],
+                                   ['if', 'Triggertype', '<trigger_array>'],
+                                   ['if', 'GoalManager_GoalIsActive', 'Name', '=', tok_name(G['gaps41'])],
+                                   ['GoalManager_SetGoalFlag', 'Name', '=', tok_name(G['gaps41']), 'got_1', 1],
+                                   ['endif'],
+                                   ['endif']]),
         # THAW's caveman lesson counts switching from walking back to skating; polled, because the
         # skater's own walking scripts clear event handlers at exactly that moment
         script('hw_cave_start', [['skater', ':', 'Obj_SpawnScript', 'hw_cave_poll']]),
@@ -317,14 +333,17 @@ def main():
                                 ['endif'],
                                 ['wait', 2, 'gameframes'],
                                 ['repeat']]),
-        script('hw_cave_stop', [['skater', ':', 'Obj_KillSpawnedScript', 'Name', '=', 'hw_cave_poll']]),
+        script('hw_cave_stop', [['skater', ':', 'Obj_KillSpawnedScript', 'Name', '=', 'hw_cave_poll']]
+                + ([['spawnscript', 'hw_debug_teleport']] if os.environ.get('HW_DEBUG') and os.environ.get('HW_SPAWN') else [])),
         # testing aid: the skater's position on screen twice a second
         script('hw_debug_teleport', [['wait', 90, 'gameframes'],
                                      ['skater', ':', 'Obj_SetPosition', 'position', '=', bytes([qb2.VEC]) + struct.pack('<3f', *map(float, os.environ.get('HW_SPAWN', '0 0 0 0').split()[:3]))],
                                      ['skater', ':', 'Obj_SetOrientation', 'y', '=', bytes([qb2.FLOAT]) + struct.pack('<f', float(os.environ.get('HW_SPAWN', '0 0 0 0').split()[3]) * 57.29578)],
+                                     
+                                     ['while'],
                                      ['skater', ':', 'SetSpeed', 0],
-                                     ['wait', 2, 'gameframes'],
-                                     ['skater', ':', 'SetSpeed', 0]]),
+                                     ['wait', 1, 'gameframes'],
+                                     ['repeat', 120]]),
         script('hw_debug_peds', [['wait', 150, 'gameframes'], ['<hw_peds>', '=', "'peds:"],
                                  ['if', 'ObjectExists', 'id', '=', 'TRG_G_COUNTER7_Pro'], ['FormatText', 'TextName', '=', 'hw_peds', "'%a 0", 'a', '=', '<hw_peds>'], ['endif'],
                                  ['if', 'ObjectExists', 'id', '=', 'TRG_G_GAP16_Pro'], ['FormatText', 'TextName', '=', 'hw_peds', "'%a 1", 'a', '=', '<hw_peds>'], ['endif'],
@@ -363,7 +382,7 @@ def main():
     fields += [(qbkey(k) if k else None, v) for k, v in common(
         'Switch to walk and back to skating 3 times: get off your board (\\be), then Caveman (\\be) back on',
         'Learn from the Hollywood skaters', 'Hollywood Skater', 'TRG_G_COUNTER7_Pro', 'TRG_G_COUNTER7_RestartNode',
-        'highcombo5', first=True)]
+        'gaps41', first=True)]
     edits.append((call_at + 5, st_end, qb2.encode_value(('struct', fields))))
     for slot, body in zip(SLOTS, goals):
         s, e = sc[slot]
@@ -377,7 +396,17 @@ def main():
             if os.environ.get('HW_SPAWN'):
                 lines.append(['spawnscript', 'hw_debug_teleport'])
             lines.append(['spawnscript', 'hw_debug_peds'])
-        edits.append((s, e, script(slot, lines)[:-1]))
+            if os.environ.get('HW_START_GOAL'):  # testing aid: start one goal directly after load
+                lines.append(['spawnscript', 'hw_debug_start_goal'])
+        body = script(slot, lines)[:-1]
+        if slot == spare[-1]:
+            # caveman lesson part 2 (THAW's z_ho_goal_gaps40): grind the red ropes, same skater
+            red_ropes = goal_call('AddGoal_Gaps', [('version', I(41)), ('time', I(120)),
+                                                   ('goal_flags', ('array', [N('got_1')]))] + common(
+                'Grind (\\b0) the red ropes', 'Learn from the Hollywood skaters', 'Hollywood Skater',
+                'TRG_G_COUNTER7_Pro', 'TRG_G_GAP7_RestartNode', 'highcombo5'))
+            body = body.replace(bytes([qb2.NEWLINE, 0x24]), red_ropes + bytes([0x24]), 1)
+        edits.append((s, e, body))
     new = bytearray()
     pos = 0
     for s, e, b in sorted(edits):
