@@ -35,13 +35,13 @@ switch ($Action) {
     'stop' { if ($p) { Stop-Process -Id $p.Id -Force }; "stopped" }
     'key' {
         if (-not $p) { throw "PPSSPP not running" }
-        $code = if ($vk.ContainsKey($Arg)) { $vk[$Arg] } else { [byte][char]$Arg.ToUpper() }
-        $scan = [byte][PspCtl]::MapVirtualKey($code, 0)
+        # "q+w" presses keys together
+        $codes = foreach ($k in $Arg.Split('+')) { if ($vk.ContainsKey($k)) { $vk[$k] } else { [byte][char]$k.ToUpper() } }
         [PspCtl]::SetForegroundWindow($p.MainWindowHandle) | Out-Null
         Start-Sleep -Milliseconds 150
-        [PspCtl]::keybd_event($code, $scan, 0, [UIntPtr]::Zero)
+        foreach ($code in $codes) { [PspCtl]::keybd_event($code, [byte][PspCtl]::MapVirtualKey($code, 0), 0, [UIntPtr]::Zero) }
         Start-Sleep -Milliseconds $Hold
-        [PspCtl]::keybd_event($code, $scan, 2, [UIntPtr]::Zero)
+        foreach ($code in $codes) { [PspCtl]::keybd_event($code, [byte][PspCtl]::MapVirtualKey($code, 0), 2, [UIntPtr]::Zero) }
         "pressed $Arg"
     }
     'shot' {

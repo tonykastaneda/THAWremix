@@ -37,9 +37,16 @@ def tokens(d, p=0, end=None):
             p = e + 1
         elif t == 0x2F or t == 0x37 or t == 0x40 or t == 0x41:
             n = struct.unpack_from('<I', d, p + 1)[0]
-            k = 4 + n * 2 + n * 4 if t == 0x37 else 4 + n * 4
+            k = 4 + n * 2 + n * 4  # count, u16 weights, u32 jump offsets
             yield p, t, d[p + 1:p + 1 + k]
             p += 1 + k
+        elif t == 0x4A:
+            # THAW: inline binary struct, u16 size, padding, then the struct
+            n = struct.unpack_from('<H', d, p + 1)[0]
+            q = p + 3
+            q += (1 - q) % 4 or 4
+            yield p, t, d[q:q + n]
+            p = q + n
         else:
             k = SIZES.get(t, 0)
             yield p, t, d[p + 1:p + 1 + k]
@@ -49,13 +56,13 @@ def tokens(d, p=0, end=None):
 def parse_value(d, p):
     """Parses one value at p (struct, array or scalar). Returns (value, next offset).
     Structs are lists of (name or None, value); flags appear as (None, ('name', key))."""
-    while d[p] in (NEWLINE, 0x02):
+    while d[p] in (NEWLINE, 0x02, 0x09):
         p += 1 + SIZES.get(d[p], 0)
     t = d[p]
     if t == LBRACE:
         out, p = [], p + 1
         while True:
-            while d[p] in (NEWLINE, 0x02):
+            while d[p] in (NEWLINE, 0x02, 0x09):
                 p += 1 + SIZES.get(d[p], 0)
             if d[p] == RBRACE:
                 return ('struct', out), p + 1

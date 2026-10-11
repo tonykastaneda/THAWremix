@@ -304,3 +304,36 @@ Collision against a prop has not been bumped into yet.
 
 Testing note: the training level's story spawn is not always "P1: Restart"; `work/exp_spawn.py`
 moves all 46 of its restart nodes to one spot. Yaw 0 faces -Z.
+
+### Story phase 1: Hollywood story goals
+
+`tools/hostory.py "THAW CLEAN/Game" work/out extracted/remix_data work/story` rebuilds THAW's
+Hollywood story chain on the training level with Remix's own goal templates (`AddGoal_Counter`,
+`AddGoal_Gaps`, `AddGoal_HighCombo`): learn caveman, sponsor challenge, kickflip Ben Whofleck,
+learn revert, beat the punk's score, and the three wool-protest combos, each the child of the one
+before. The training level's 37 story goals are replaced (their scripts emptied, except the caveman
+goal, which is kept and retexted). Goal peds and restart nodes are the training level's own
+(`TRG_G_COUNTER7_Pro` and so on, Remix pros standing in for THAW's characters), moved to THAW's goal
+positions. Writes `tr.qb`, `tr_scripts.qb` and `tr_scripts.pre`.
+
+Verified in game: View Goals lists all eight; the caveman goal's ped stands at THAW's spot with
+"Hollywood Skater: O to talk", the intro text box shows, and three caveman switches complete it.
+The other seven are untested.
+
+Learned on the way:
+- Remix goal ids are `tr_goal_<type><version>`; `AddGoal_*` fill in `TRG_G_<TYPE><version>_Pro` and
+  `_RestartNode` when not given. The training level's story master script calls one script per goal.
+- `SkaterExitWalking`, `SkaterEnterRevert` and the like are broadcast events (`SetEventHandler`), not
+  exceptions. Even so, a handler for leaving walk mode never fired (the skater's switch scripts clear
+  handlers at that moment), so the caveman counter polls `skater : walking` every two frames.
+- Getting off the board on PSP is L1 alone (`SwitchControl_Trigger = { Press, L1, 10 }`); PPSSPP maps
+  L1 to Q here.
+- Script control flow: `if` (0x47) and `else` (0x48) carry a 16-bit offset counted from the offset
+  field to just past the matching `else` field or `endif` (0x28); `while`/`repeat` are 0x20/0x21;
+  the random token 0x2F carries a count, u16 weights and u32 offsets.
+- THAW scripts have an inline binary struct token (0x4A: u16 size, padding, struct);
+  `tools/thawqbdump.py` prints THAW scripts as text, `tools/qbscripts.py` Remix ones.
+
+Testing aids (environment variables for `hostory.py`): `HW_SPAWN="x y z yaw"` moves the level's other
+restarts to one spot; `HW_DEBUG=1` adds an on-screen position readout and messages from the goal
+helper scripts.
