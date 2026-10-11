@@ -205,6 +205,28 @@ def replace_in_pre(src, dst, name, data):
     open(dst, 'wb').write(out)
 
 
+def append_to_pre(src, dst, entries):
+    """Copies a .pre with new entries [(name, data)] added at the end, uncompressed, each keyed by
+    the checksum of its path (as the shipped entries are)."""
+    from pak import qbkey
+    d = open(src, 'rb').read()
+    size, ver, magic, n = struct.unpack_from('<IHHI', d, 0)
+    out = bytearray(d)
+    out += bytes(-len(out) % 4)
+    grow = 0
+    for name, data in entries:
+        nb = name.encode('latin-1') + b'\0'
+        nb += bytes(-len(nb) % 4)
+        out += struct.pack('<IIII', len(data), 0, len(nb), qbkey(name)) + nb + data
+        out += bytes(-len(out) % 4)
+        grow += (len(data) + 15) & ~15
+    struct.pack_into('<I', out, 0, len(out))
+    struct.pack_into('<I', out, 8, n + len(entries))
+    if ver == 4:
+        struct.pack_into('<I', out, 0x0C, struct.unpack_from('<I', d, 0x0C)[0] + grow)
+    open(dst, 'wb').write(out)
+
+
 def write_pre(path, ver, magic, extra, entries):
     """Entries stored uncompressed (compressed size 0), as the shipped .pre files already do for
     some entries."""

@@ -566,3 +566,20 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   left out; Remix has no such textures.
 - Verified: pause shows the THAW layout; View Goals, Game Options (and Back to the pause menu) and
   Continue (HUD back) work. Not ported: THAW's area map, clock/cash and combo records.
+
+### Pause menu map (Hollywood)
+
+- THAW draws each area's map in the pause menu (`pause_menu_map`) from the level struct:
+  Level_Z_HO has `level_map` ho_level_map (panelsprites, 128x128; `_x` is a 256x256 Xenon copy),
+  `map_offset` (-265, -1395), `map_conversion` 0.013 per inch and `map_scale` 2.4. The skater
+  arrow (`Bike_arrow`) sits at (world x, z - map_offset) * conversion from the map's centre, turned
+  by GetHeading + 90.
+- `tools/ui/pausemap.q` ports it for story mode in Hollywood (`LevelIs load_tr`). The offset gains
+  the level's build shift (`thawui.level_shift`, the same rounding as hostory.py), so Remix
+  positions map as THAW's do: (-949.4375, -2423.4375). THAW's compass blips are left out.
+- New sprites: `qb2.append_to_pre` adds entries to a .pre (keyed by the checksum of the path, size
+  hint grown); the names go into the permanent panel sprite list (sprites.qb array 0xB5F55941,
+  loaded with panelsprites.pre at boot). Image headers carry the constant 0x12FC7C; the texture
+  name comes from the load list. New entries have no loose copy (not in datap).
+- Verified: the map shows left of the pause list; at Remix (-1411, -1756) the arrow sits where the
+  formula puts it (about 11 px left of and 12 px below the map centre).

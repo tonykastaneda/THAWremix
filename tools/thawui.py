@@ -49,6 +49,20 @@ SUBMENU_VIEWS = {
 }
 
 
+def level_shift(install):
+    """The shift Hollywood was built with (tools/hostory.py: Remix's training P1 restart minus
+    THAW's P1 restart, rounded to 1/16 in), so THAW positions + shift = Remix positions."""
+    import thawscene
+    from pak import open_pak
+    from hostory import AT
+    entries, blob = open_pak(os.path.join(install, 'data', 'worlds', 'worldzones', 'z_ho', 'z_ho.pak.wpc'))
+    e = next(e for e in entries if (e['name'] or '').lower().endswith('\\z_ho.qb.wpc'))
+    tmp = os.path.join(os.environ.get('TEMP', '.'), 'z_ho_ui_nodes.qb')
+    open(tmp, 'wb').write(blob[e['offset']:e['offset'] + e['size']])
+    p1 = next(d for d in thawscene.expanded_nodes(tmp, 'z_ho') if d.get('RestartName') == 'P1: Restart')
+    return np.round((AT - np.array(p1['Pos'])) * 16) / 16
+
+
 def append_call(d, script_name, line):
     """A compiled .qb with `line` (qbc source) run at the end of script_name."""
     import qbscripts
@@ -159,8 +173,39 @@ def main():
     qb2.replace_in_pre(qbs, qbs, name, themes)
     loose['\\' + name] = themes
 
-    # THAW's pause menu (pause.q: Remix's items as THAW's label menu, THAW's backdrop and title)
-    patch_pre(qbs, qbs, 'scripts\\game\\menu\\gamemenu_pause.qb', ['pause.q'])
+    # THAW's pause menu (pause.q: Remix's items as THAW's label menu, THAW's backdrop and title;
+    # pausemap.q: THAW's Hollywood map with the skater arrow, offset by the level's build shift)
+    shift = level_shift(a.install)
+    offset = (-265.0 + shift[0], -1395.0 + shift[2])  # THAW's Level_Z_HO map_offset (x, z)
+    src = open(os.path.join(UI, 'pausemap.q'), encoding='utf-8').read().replace('MAP_OFFSET', '(%.4f, %.4f)' % offset)
+    open(os.path.join(a.out, 'pausemap.q'), 'w', encoding='utf-8').write(src)
+    patch_pre(qbs, qbs, 'scripts\\game\\menu\\gamemenu_pause.qb', ['pause.q', os.path.abspath(os.path.join(a.out, 'pausemap.q'))])
+    print(f'pause map offset {offset}')
+
+    # the map and the arrow are new sprites: into panelsprites.pre and the permanent panel sprite
+    # list (sprites.qb, 0xb5f55941, loaded with the pre at boot)
+    psp = os.path.join(a.out, 'panelsprites.pre')
+    new = []
+    for name, src_name in (('ho_level_map', 'ho_level_map'), ('Bike_arrow', 'bike_arrow')):
+        img, used = pspimg.read_wpc(open(os.path.join(images, 'panelsprites', f'{src_name}.img.wpc'), 'rb').read())
+        h, w = img.shape[:2]
+        W, H = 1 << (w - 1).bit_length(), 1 << (h - 1).bit_length()
+        buf = np.zeros((H, W, 4), np.uint8)
+        buf[:h, :w] = img
+        data = pspimg.make_psp(buf, (min(used[0], W), min(used[1], H)), 0x12FC7C, 256 if name == 'ho_level_map' else 16)
+        new.append((f'images\\PanelSprites\\{name}.img.psp', data))  # (no loose copy: not in datap)
+    qb2.append_to_pre(psp, psp, new)
+    files = {n.lower(): (n, d) for n, k, d in qb2.read_pre(qbs)[3]}
+    name, sprites = files['scripts\\game\\menu\\sprites.qb']
+    p = qb2.find_item(sprites, 0xB5F55941)
+    arr, end = qb2.parse_value(sprites, p)
+    while sprites[p] in (qb2.NEWLINE, 0x02):
+        p += 1
+    arr[1].extend(('str', f'PanelSprites/{n}') for n in ('ho_level_map', 'Bike_arrow'))
+    sprites = sprites[:p] + qb2.encode_value(arr) + sprites[end:]
+    list(qb2.tokens(sprites))
+    qb2.replace_in_pre(qbs, qbs, name, sprites)
+    loose['\\' + name] = sprites
 
     # the main menu room's sign: THUG2's logo (texture 61) becomes THAW's from its own main menu
     # (z_mainmenu texture 72); both are 256x128 and stored upside down

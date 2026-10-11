@@ -84,6 +84,12 @@ endif
 paused_title_text
 kill_start_key_binding
 white_poly_bg_effect
+; THAW's area map on the left, in story mode in Hollywood (tools/ui/pausemap.q)
+if GameModeEquals Is_Career
+if LevelIs load_tr
+RunScriptOnScreenElement id = current_menu_anchor hw_pause_map
+endif
+endif
 add_music_track_text Pos = (575, 320)
 if GameModeEquals Is_SingleSession
 add_label_menu_item { scale = 0.85 rot = 0 label_offset = (-20, 0) text = "CONTINUE"
