@@ -81,6 +81,8 @@ def assemble_line(words):
             out.append(qb2.EQ)
         elif w == ':':
             out.append(0x42)
+        elif w == 'not':
+            out.append(0x39)
         elif w.startswith("'"):
             b = w[1:].encode('latin-1') + b'\0'
             out += bytes([qb2.STRING]) + struct.pack('<I', len(b)) + b
@@ -367,7 +369,30 @@ def main():
                                ['wait', 2, 'gameframes'],
                                ['repeat']]),
         script('hw_ben_stop', [['skater', ':', 'Obj_KillSpawnedScript', 'Name', '=', 'hw_ben_poll']]),
-        event_counter('hw_revert', 'SkaterEnterRevert', G['counter40']),
+        # revert: polled on the skater; a combo with a Revert in it counts once
+        script('hw_revert_start', [['skater', ':', 'Obj_SpawnScript', 'hw_revert_poll']]
+                + ([['spawnscript', 'hw_debug_teleport']] if os.environ.get('HW_DEBUG') and os.environ.get('HW_TP_ON_START') else [])),
+        script('hw_revert_poll', [['while'],
+                                  ['if', 'SkaterCurrentScorePotGreaterThan', 0],
+                                  # Remix names the trick 'FS Revert' or 'BS Revert'
+                                  ['GetNumberOfTrickOccurrences', 'TrickText', '=', "'FS Revert"],
+                                  ['<hw_rv>', '=', '<Number_Of_Occurrences>'],
+                                  ['GetNumberOfTrickOccurrences', 'TrickText', '=', "'BS Revert"],
+                                  ['if', bytes([0x0E, 0x0E, 0x2D]) + tok_name('hw_rv') + bytes([0x0B, 0x2D]) + tok_name('Number_Of_Occurrences')
+                                   + bytes([0x0F, 0x14, qb2.INT]) + struct.pack('<i', 0) + bytes([0x0F])],
+                                  ] + ([['create_panel_message', 'id', '=', 'hw_dbg7', 'text', '=', "'revert seen"]] if os.environ.get('HW_DEBUG') else []) + [
+                                  ['GoalManager_GotCounterObject', 'Name', '=', tok_name(G['counter40'])],
+                                  ['while'],
+                                  ['wait', 2, 'gameframes'],
+                                  ['if', 'not', 'SkaterCurrentScorePotGreaterThan', 0],
+                                  [bytes([0x22])],
+                                  ['endif'],
+                                  ['repeat'],
+                                  ['endif'],
+                                  ['endif'],
+                                  ['wait', 2, 'gameframes'],
+                                  ['repeat']]),
+        script('hw_revert_stop', [['skater', ':', 'Obj_KillSpawnedScript', 'Name', '=', 'hw_revert_poll']]),
         script('hw_dbg_watch', [['while'],
                                 ['<hw_st>', '=', "'goal: inactive"],
                                 ['if', 'GoalManager_GoalIsActive', 'Name', '=', tok_name(qbkey('tr_goal_' + os.environ.get('HW_START_GOAL', 'none')))],
@@ -420,7 +445,7 @@ def main():
         script('hw_cave_stop', [['skater', ':', 'Obj_KillSpawnedScript', 'Name', '=', 'hw_cave_poll']]
                 + ([['spawnscript', 'hw_debug_teleport']] if os.environ.get('HW_DEBUG') and os.environ.get('HW_SPAWN') else [])),
         # testing aid: the skater's position on screen twice a second
-        script('hw_debug_teleport', [['wait', 90, 'gameframes'],
+        script('hw_debug_teleport', [['wait', int(os.environ.get('HW_TP_WAIT', 90)), 'gameframes'],
                                      ['skater', ':', 'Obj_SetPosition', 'position', '=', bytes([qb2.VEC]) + struct.pack('<3f', *map(float, os.environ.get('HW_SPAWN', '0 0 0 0').split()[:3]))],
                                      ['skater', ':', 'Obj_SetOrientation', 'y', '=', bytes([qb2.FLOAT]) + struct.pack('<f', float(os.environ.get('HW_SPAWN', '0 0 0 0').split()[3]) * 57.29578)],
                                      

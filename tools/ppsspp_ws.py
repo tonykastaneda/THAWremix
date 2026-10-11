@@ -12,7 +12,7 @@ test copy's own process is ever killed.
   ppsspp_ws.py seq "<step>,<step>,..."     steps: wait:<ms> | <buttons>[:<ms>] | shot:<png> | stick:<x>:<y>:<ms>
   ppsspp_ws.py shot <png>                   the emulated PSP framebuffer
 
-Buttons: cross circle triangle square up down left right start select l r.
+Buttons: cross circle triangle square up down left right start select ltrigger rtrigger.
 """
 import base64
 import io
