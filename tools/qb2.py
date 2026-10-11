@@ -42,9 +42,11 @@ def tokens(d, p=0, end=None):
             p += 1 + k
         elif t == 0x4A:
             # THAW: inline binary struct, u16 size, padding, then the struct
+            # (aligned in THAW's memory, not in the script: the struct header 00 00 01 00 is found
+            # within the padding)
             n = struct.unpack_from('<H', d, p + 1)[0]
             q = p + 3
-            q += (1 - q) % 4 or 4
+            q += next((k for k in range(4) if d[q + k:q + k + 4] == b'\0\0\1\0'), 0)
             yield p, t, d[q:q + n]
             p = q + n
         else:

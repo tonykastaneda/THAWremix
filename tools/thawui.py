@@ -159,6 +159,9 @@ def main():
     qb2.replace_in_pre(qbs, qbs, name, themes)
     loose['\\' + name] = themes
 
+    # THAW's pause menu (pause.q: Remix's items as THAW's label menu, THAW's backdrop and title)
+    patch_pre(qbs, qbs, 'scripts\\game\\menu\\gamemenu_pause.qb', ['pause.q'])
+
     # the main menu room's sign: THUG2's logo (texture 61) becomes THAW's from its own main menu
     # (z_mainmenu texture 72); both are 256x128 and stored upside down
     if a.mainmenu_level:

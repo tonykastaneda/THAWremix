@@ -15,7 +15,57 @@ OPS = {0x01: '\n', 0x03: '{', 0x04: '}', 0x05: '[', 0x06: ']', 0x07: '=', 0x08: 
        0x29: 'return'}
 
 
+def qstr(s, q):
+    s = s.replace('\\', '\\\\').replace(q, '\\' + q)
+    return q + ''.join(c if 32 <= ord(c) < 127 else '\\x%02x' % ord(c) for c in s) + q
+
+
+def inline_struct(pl):
+    """THAW's 0x4A token: a binary struct (the .qb.wpc item layout, offsets from its own start)
+    printed as { ... } source. Item types: 1 int, 2 float, 3 string, 4 local string, 5 pair,
+    6 vector, 10 struct, 12 array, 13 name."""
+    u32 = lambda o: struct.unpack_from('<I', pl, o)[0]  # noqa: E731
+
+    def cstr(o):
+        return pl[o:pl.index(b'\0', o)].decode('latin-1')
+
+    def value(t, v):
+        if t == 1:
+            return str(struct.unpack('<i', struct.pack('<I', v))[0])
+        if t == 2:
+            s = '%g' % struct.unpack('<f', struct.pack('<I', v))[0]
+            return s if any(c in s for c in '.en') else s + '.0'
+        if t in (3, 4):
+            return qstr(cstr(v), '"' if t == 3 else "'")
+        if t in (5, 6):
+            f = struct.unpack_from('<%df' % (t - 3), pl, v + 4)
+            return '(' + ', '.join('%g' % x for x in f) + ')'
+        if t == 10:
+            return struct_at(v)
+        if t == 12:
+            et, n = pl[v + 2], u32(v + 4)
+            if n == 0:
+                return '[ ]'
+            base = v + 8 if n == 1 else u32(v + 8)
+            return '[ ' + ' '.join(value(et, u32(base + 4 * i)) for i in range(n)) + ' ]'
+        if t == 13:
+            return qb.nm(v)
+        return '#?%d' % t
+
+    def struct_at(o):
+        out, p = [], u32(o + 4)
+        while p:
+            t = pl[p + 1] >> 1
+            idk, v, nxt = struct.unpack_from('<3I', pl, p + 4)
+            out.append(value(t, v) if not idk else f'{qb.nm(idk)} = {value(t, v)}')
+            p = nxt
+        return '{ ' + ' '.join(out) + ' }'
+    return struct_at(0)
+
+
 def fmt(t, pl):
+    if t == 0x4A:
+        return inline_struct(pl)
     if t == 0x16:
         return qb.nm(struct.unpack_from('<I', pl)[0])
     if t == 0x17:
@@ -29,9 +79,7 @@ def fmt(t, pl):
         return '(%g, %g, %g)' % struct.unpack_from('<3f', pl)
     if t in (0x1B, 0x1C):
         # "string" (0x1B) and 'local string' (0x1C), escaped the way tools/qbc.py reads them
-        q = '"' if t == 0x1B else "'"
-        s = pl[4:-1].decode('latin-1').replace('\\', '\\\\').replace(q, '\\' + q)
-        return q + ''.join(c if 32 <= ord(c) < 127 else '\\x%02x' % ord(c) for c in s) + q
+        return qstr(pl[4:-1].decode('latin-1'), '"' if t == 0x1B else "'")
     return OPS.get(t, '#%02x' % t)
 
 

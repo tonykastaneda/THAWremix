@@ -547,3 +547,22 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
 - Verified: main menu, Story Mode Options, Create-A-Modes and Game Options each show their own
   view, and Back returns to the main view. Skater select and CAS from Create-A-Modes show the room
   with no panel in the way.
+
+### THAW pause menu
+
+- THAW's inline struct token (0x4A) is a binary struct in the .qb.wpc item layout, offsets from its
+  own header (00 00 01 00, first item offset). The header is aligned in THAW's memory, not in the
+  script; the old fixed alignment rule misread it and everything after it in the script.
+  `qb2.tokens` now finds the header in the padding, and `thawqbdump` prints the struct as
+  `{ ... }` source (3 more of THAW's pause scripts now decode).
+- `tools/ui/pause.q` (generated once from both games' scripts, then kept as source) is Remix's
+  `create_pause_menu` with its own items, conditions and handlers, built as THAW's label menu:
+  `make_label_menu` at THAW's (410, 75), `add_label_menu_item` with THAW's scale 0.85 and its
+  tilt / offset pattern, and `label_menu_finish`.
+- THAW's `white_poly_bg_effect` (white wash, purple and black bars, dark side panels) and
+  `paused_title_text` ("P A U S E D", black, rotated 11 degrees) replace THUG2's side gradient and
+  yellow sign. The sign is a theme piece that `build_pause_menu_parts` brings in, so it is faded
+  out after the menu is built. THAW's faint stars (`hud_comp_goal`) and dirt strip (`strip_2`) are
+  left out; Remix has no such textures.
+- Verified: pause shows the THAW layout; View Goals, Game Options (and Back to the pause menu) and
+  Continue (HUD back) work. Not ported: THAW's area map, clock/cash and combo records.
