@@ -461,7 +461,8 @@ def main():
                                 'TRG_G_GAP20_Pro', 'TRG_G_GAP20_RestartNode', child,
                                 post=('hw_dino_fall' if v == 47 else None)))
 
-    helpers = b''.join(shop_scripts + combo_watchers + [
+    goto = [script('hw_goto_level', [['wait', 120, 'gameframes'], ['change_level', 'level', '=', os.environ['HW_GOTO_LEVEL']]])]         if os.environ.get('HW_GOTO_LEVEL') else []
+    helpers = b''.join(shop_scripts + combo_watchers + goto + [
         # Ben: polled on the skater (event handlers for skater events never fired): while in a combo
         # that has a Kickflip in it, being within 180 inches of Ben wins. Ben's position is fixed.
         script('hw_ben_start', [['skater', ':', 'Obj_SpawnScript', 'hw_ben_poll']]),
@@ -653,6 +654,9 @@ def main():
         lines = []
         if slot == spare[1]:
             lines = [['spawnscript', 'hw_shop_return']]
+        if slot == spare[3] and os.environ.get('HW_GOTO_LEVEL'):
+            # testing aid: from story mode straight into another level (a stock one, for comparison)
+            lines = [['spawnscript', 'hw_goto_level']]
         if slot == spare[2] and os.environ.get('HW_SHOT'):
             lines = [['spawnscript', 'hw_shot_cams']]
         if os.environ.get('HW_DEBUG') and slot == spare[0]:
