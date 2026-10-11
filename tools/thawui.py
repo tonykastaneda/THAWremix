@@ -40,6 +40,7 @@ MENU_PANEL_SPRITES = ['roundbar', 'roundbar_highlight', 'roundbar_middle', 'roun
 THEME_COLOURS = ['DE_HIGHLIGHTED_TEXT_COLOR_NEW', 'DE_UNHIGHLIGHTED_TEXT_COLOR_NEW', 'DE_HIGHLIGHT_BAR_COLOR',
                  'DE_PAUSEBAR_COLOR']
 UI = os.path.join(os.path.dirname(__file__), 'ui')
+MAP_SLOT, ARROW_SLOT = 'shrek_logo', 'hoop'  # unused panel sprites that carry the pause map
 # submenus that show their own view of THAW's alley (tools/casbackdrop.py SUB_PANELS): a call added
 # at the end of each, after the menu has set its own camera
 SUBMENU_VIEWS = {
@@ -161,7 +162,7 @@ def main():
         files = {n.lower(): (n, d) for n, k, d in qb2.read_pre(src_pre)[3]}
         name, d = files[entry.lower()]
         text = ''.join(open(os.path.join(UI, s), encoding='utf-8').read() + '\n' for s in sources)
-        if no_map:
+        if no_map or os.environ.get('THX_NO_MAP_CALL'):
             text = text.replace('RunScriptOnScreenElement id = current_menu_anchor hw_pause_map', '')
         code = qbc.compile_source(text)
         new = qbc.patch(d, code) if code else d
@@ -188,37 +189,30 @@ def main():
     # pausemap.q: THAW's Hollywood map with the skater arrow, offset by the level's build shift)
     shift = level_shift(a.install)
     offset = (-265.0 + shift[0], -1395.0 + shift[2])  # THAW's Level_Z_HO map_offset (x, z)
-    src = open(os.path.join(UI, 'pausemap.q'), encoding='utf-8').read().replace('MAP_OFFSET', '(%.4f, %.4f)' % offset)
+    src = open(os.path.join(UI, 'pausemap.q'), encoding='utf-8').read().replace('MAP_OFFSET', '(%.4f, %.4f)' % offset) \
+        .replace('Texture = ho_level_map', f'Texture = {MAP_SLOT}').replace('Texture = Bike_arrow', f'Texture = {ARROW_SLOT}')
     open(os.path.join(a.out, 'pausemap.q'), 'w', encoding='utf-8').write(src)
-    patch_pre(qbs, qbs, 'scripts\\game\\menu\\gamemenu_pause.qb',
-              ['pause.q'] + ([] if no_map else [os.path.abspath(os.path.join(a.out, 'pausemap.q'))]))
+    if not os.environ.get('THX_NO_PAUSE'):  # bisection switch: Remix's own pause screen
+        patch_pre(qbs, qbs, 'scripts\\game\\menu\\gamemenu_pause.qb',
+                  ['pause.q'] + ([] if no_map else [os.path.abspath(os.path.join(a.out, 'pausemap.q'))]))
     print(f'pause map offset {offset}')
 
-    # the map and the arrow are new sprites: into panelsprites.pre and the permanent panel sprite
-    # list (sprites.qb, 0xb5f55941, loaded with the pre at boot)
+    # the map and the arrow go into two panel sprites the game never shows (THUG2's Shrek logo and
+    # basketball hoop): Remix's boot-time panel texture list (sprites.qb, 0xB5F55941, 143 names)
+    # cannot take more names. Two more, even tiny ones, and the pause menu reads a null string (a
+    # crash on a real PSP), so the list stays as shipped and these slots are reused.
     psp = os.path.join(a.out, 'panelsprites.pre')
-    new = []
-    for name, src_name in () if no_map else (('ho_level_map', 'ho_level_map'), ('Bike_arrow', 'bike_arrow')):
+    entries = {n.lower(): n for n, k, d in qb2.read_pre(psp)[3]}
+    for slot, src_name, colours in () if no_map else ((MAP_SLOT, 'ho_level_map', 16), (ARROW_SLOT, 'bike_arrow', 16)):
         img, used = pspimg.read_wpc(open(os.path.join(images, 'panelsprites', f'{src_name}.img.wpc'), 'rb').read())
         h, w = img.shape[:2]
         W, H = 1 << (w - 1).bit_length(), 1 << (h - 1).bit_length()
         buf = np.zeros((H, W, 4), np.uint8)
         buf[:h, :w] = img
-        data = pspimg.make_psp(buf, (min(used[0], W), min(used[1], H)), 0x12FC7C, 256 if name == 'ho_level_map' else 16)
-        new.append((f'images\\PanelSprites\\{name}.img.psp', data))  # (no loose copy: not in datap)
-    if not no_map:
-        qb2.append_to_pre(psp, psp, new)
-    files = {n.lower(): (n, d) for n, k, d in qb2.read_pre(qbs)[3]}
-    name, sprites = files['scripts\\game\\menu\\sprites.qb']
-    p = qb2.find_item(sprites, 0xB5F55941)
-    arr, end = qb2.parse_value(sprites, p)
-    while sprites[p] in (qb2.NEWLINE, 0x02):
-        p += 1
-    arr[1].extend(('str', f'PanelSprites/{n}') for n in (() if no_map else ('ho_level_map', 'Bike_arrow')))
-    sprites = sprites[:p] + qb2.encode_value(arr) + sprites[end:]
-    list(qb2.tokens(sprites))
-    qb2.replace_in_pre(qbs, qbs, name, sprites)
-    loose['\\' + name] = sprites
+        data = pspimg.make_psp(buf, (min(used[0], W), min(used[1], H)), 0x12FC7C, colours)
+        name = entries[f'images\\panelsprites\\{slot.lower()}.img.psp']
+        qb2.replace_in_pre(psp, psp, name, data)
+        loose[f'\\images\\panelsprites\\{slot.lower()}.img.psp'] = data
 
     # the main menu room's sign: THUG2's logo (texture 61) becomes THAW's from its own main menu
     # (z_mainmenu texture 72); both are 256x128 and stored upside down

@@ -174,9 +174,69 @@ def read_pre(path):
     return ver, magic, d[0x0C:0x10] if ver == 4 else b'', out
 
 
+def lzss_pack(data):
+    """Neversoft / Okumura LZSS, the format thawscene.lzss and Remix's loader read: a 4096-byte ring
+    preset to spaces with writing from 0xFEE, a flag byte per 8 items (low bit first, 1 = literal
+    byte), a match is 2 bytes (ring offset low 8 bits, then offset high 4 bits << 4 | length - 3),
+    lengths 3..18. Greedy, matching within the last 4078 bytes written."""
+    n = len(data)
+    out = bytearray()
+    heads = {}
+    i = 0
+    flags_at, bit, flags = None, 8, 0
+    while i < n:
+        if bit == 8:
+            if flags_at is not None:
+                out[flags_at] = flags
+            flags_at, bit, flags = len(out), 0, 0
+            out.append(0)
+        best_len, best_pos = 0, 0
+        if i + 2 < n:
+            key = data[i:i + 3]
+            cands = heads.get(key)
+            if cands:
+                limit = min(18, n - i)
+                for q in reversed(cands[-48:]):
+                    if i - q > 4078:
+                        break
+                    k = 3
+                    while k < limit and data[q + k] == data[i + k]:
+                        k += 1
+                    if k > best_len:
+                        best_len, best_pos = k, q
+                        if k == limit:
+                            break
+        if best_len >= 3:
+            off = (0xFEE + best_pos) & 0xFFF
+            out += bytes([off & 0xFF, ((off >> 4) & 0xF0) | (best_len - 3)])
+            step = best_len
+        else:
+            flags |= 1 << bit
+            out.append(data[i])
+            step = 1
+        for j in range(i, min(i + step, n - 2)):
+            heads.setdefault(data[j:j + 3], []).append(j)
+        i += step
+        bit += 1
+    if flags_at is not None:
+        out[flags_at] = flags
+    return bytes(out)
+
+
+def pre_entry(data):
+    """(stored bytes, compressed size field): LZSS when it saves space, as Remix's own .pre files
+    store almost everything. Remix's loader needs about twice an entry's size of buffer room for a
+    stored-plain entry (see tools/precheck.py), so big plain entries make it stop at boot."""
+    packed = lzss_pack(data)
+    if len(packed) < len(data):
+        return packed, len(packed)
+    return data, 0
+
+
 def replace_in_pre(src, dst, name, data):
-    """Copies a .pre, swapping one entry (matched by name, case-insensitive) for `data` stored
-    uncompressed. Every other entry keeps its original bytes."""
+    """Copies a .pre, swapping one entry (matched by name, case-insensitive) for `data`, LZSS-packed
+    where that helps (pre_entry). Every other entry keeps its original bytes. The size field at 0x0C
+    (the loader's buffer, see tools/precheck.py) grows with the unpacked size."""
     d = open(src, 'rb').read()
     size, ver, magic, n = struct.unpack_from('<IHHI', d, 0)
     head = 0x10 if ver == 4 else 0x0C
@@ -189,7 +249,8 @@ def replace_in_pre(src, dst, name, data):
         body = p + 16 + nlen
         nxt = (body + (csz or dsz) + 3) & ~3
         if ename.lower() == name.lower():
-            out += struct.pack('<IIII', len(data), 0, nlen, cks) + d[p + 16:body] + data
+            stored, packed = pre_entry(data)
+            out += struct.pack('<IIII', len(data), packed, nlen, cks) + d[p + 16:body] + stored
             out += bytes(-len(out) % 4)
             grow = max(0, len(data) - dsz)
             found = True
@@ -206,8 +267,8 @@ def replace_in_pre(src, dst, name, data):
 
 
 def append_to_pre(src, dst, entries):
-    """Copies a .pre with new entries [(name, data)] added at the end, uncompressed, each keyed by
-    the checksum of its path (as the shipped entries are)."""
+    """Copies a .pre with new entries [(name, data)] added at the end (LZSS-packed where that helps),
+    each keyed by the checksum of its path (as the shipped entries are)."""
     from pak import qbkey
     d = open(src, 'rb').read()
     size, ver, magic, n = struct.unpack_from('<IHHI', d, 0)
@@ -217,9 +278,10 @@ def append_to_pre(src, dst, entries):
     for name, data in entries:
         nb = name.encode('latin-1') + b'\0'
         nb += bytes(-len(nb) % 4)
-        out += struct.pack('<IIII', len(data), 0, len(nb), qbkey(name)) + nb + data
+        stored, packed = pre_entry(data)
+        out += struct.pack('<IIII', len(data), packed, len(nb), qbkey(name)) + nb + stored
         out += bytes(-len(out) % 4)
-        grow += (len(data) + 15) & ~15
+        grow += ((len(data) + 15) & ~15) + ((16 + len(nb) + 15) & ~15)
     struct.pack_into('<I', out, 0, len(out))
     struct.pack_into('<I', out, 8, n + len(entries))
     if ver == 4:

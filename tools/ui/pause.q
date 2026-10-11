@@ -481,5 +481,8 @@ rot_angle = -10
 endscript
 
 script paused_title_text
-CreateScreenElement { Type = TextElement parent = current_menu_anchor id = paused_text text = "P A U S E D" font = small just = [ right top ] scale = (2.3, 2.6) Pos = (390, 26) rgba = [ 0 0 0 128 ] z_priority = 2 rot_angle = 11 }
+; rot_angle on the text element itself (THAW's way) crashes a real PSP: Remix's text drawing reads a
+; null string for rotated text. The tilt goes on a container instead, as the label menu does it.
+CreateScreenElement { Type = ContainerElement parent = current_menu_anchor id = paused_text_anchor Pos = (395, 78) just = [ right top ] rot_angle = 11 }
+CreateScreenElement { Type = TextElement parent = paused_text_anchor id = paused_text text = 'P A U S E D' font = small just = [ right top ] scale = (2.3, 2.6) Pos = (0, 0) rgba = [ 0 0 0 128 ] z_priority = 2 }
 endscript

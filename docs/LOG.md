@@ -658,3 +658,27 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
 - Bisection switches in `tools/thawui.py`: THX_NO_SPRITES (Remix's menu sprites kept) and
   THX_NO_MAP (no pause map: no appended sprites, no load list change, no call). `work/mklayers.py`
   builds L4-NOMAP and L4-NOSPR from those outputs; both boot in PPSSPP.
+- Strict PPSSPP: `IgnoreBadMemAccess = False` in the test copy's ini makes PPSSPP halt on the bad
+  reads a real PSP dies on. With it, all three hardware crashes reproduced, and each was fixed.
+- Crash 1, boot (after the disclaimer): the Remix .pre loader (FUN_0000e76c) reads the whole file to
+  the end of its buffer and unpacks entries forward. A plain (unpacked) entry needs about twice its
+  size of room (`end <= dest_end + dsz + 0x14`), and unpacked data must not pass the next packed
+  entry. If a check fails, the loader prints "FATAL ERROR:Decompression data has overrun" and hits
+  `break`, which crashes a real PSP; PPSSPP carries on. Our replaced and appended entries were stored
+  plain. `qb2.replace_in_pre` / `append_to_pre` now store LZSS-packed entries (`lzss_pack`:
+  Neversoft/Okumura, 4096 ring, writes from 0xFEE) when that is smaller. `tools/precheck.py` models
+  the loader's checks; every pack we write passes.
+- Crash 2, Start New Story: tr_scripts.pre held a 414 KB plain TR.qb (fixed by crash 1's packing).
+  After that, training-level nodes used TrickObject/Cluster names, often inherited from a template
+  node, whose sectors are not in the level; the trick-object manager's sector lookup returns null.
+  `hostory.py` resolves templates and strips TrickObject/Cluster when the cluster is not a level
+  sector (638 nodes), and drops CreatedAtStart from LevelGeometry/LevelObject pieces with no sector
+  (735).
+- Crash 3, pause: THAW sets `rot_angle` on the "P A U S E D" TextElement. On a real PSP that reads a
+  null string (FUN_0007b710). The rotation now sits on a ContainerElement (`paused_text_anchor`,
+  Pos (395, 78)) holding the text; the label menu title gets the same fix.
+- The pause map and arrow now replace two panel sprites the game never shows (`shrek_logo`, `hoop`)
+  rather than adding names to Remix's boot sprite list (sprites.qb 0xB5F55941). This was a
+  suspect during the hunt; it turned out not to be the cause, but it is kept.
+- Strict run on the new `work/iso/THX Hollywood.iso` (L4): boot, menu, new story, Hollywood, pause
+  (map, rotated title), View Goals, unpause. No halt.

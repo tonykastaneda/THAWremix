@@ -38,7 +38,7 @@ rgba = <> title_rgba
 scale = <> title_scale
 Pos = <> title_pos
 just = <> title_just
-rot_angle = <> title_rotation
+; (no rot_angle: a rotated text element crashes a real PSP, see pause.q)
 }
 endif
 if GotParam scrolling

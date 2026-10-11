@@ -34,6 +34,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(__file__))
 import qb2  # noqa: E402
+import psplevel  # noqa: E402
 import qbscripts  # noqa: E402
 import thawscene  # noqa: E402
 from pak import open_pak, qbkey  # noqa: E402
@@ -311,6 +312,45 @@ def main():
                     elif k == qbkey('Angles'):
                         n[1][i] = (k, ('vec', (0.0, yaw, 0.0)))
         print('test spawn at', x, y, z)
+    # the training level's trick objects (TrickObject with a Cluster: its graffiti pieces) name
+    # sectors Hollywood does not have. The trick object manager looks each cluster up at level
+    # start and uses the result unchecked: a null read that PPSSPP ignores and a real PSP crashes
+    # on. Nodes whose cluster is not a piece of this level lose both.
+    lvl = psplevel.Level(os.path.join(outdir_build, 'tr.psp_level'))
+    sectors = set(struct.unpack_from(f'<{lvl.n_boxes}I', lvl.data, lvl.boxnames))
+    col = open(os.path.join(outdir_build, 'tr.col.ps2'), 'rb').read()
+    sectors |= {struct.unpack_from('<I', col, 0x20 + 0x40 * i)[0] for i in range(struct.unpack_from('<i', col, 4)[0])}
+    # Most of Remix's nodes take these from a shared template (a bare name naming a global struct),
+    # so the template's fields are merged in first. Level pieces created at start whose sector is
+    # not here (the training level's own geometry) stop being created at start for the same reason.
+    templates = {}
+
+    def template(k):
+        if k not in templates:
+            p = qb2.find_item(d, k)
+            v = qb2.parse_value(d, p)[0] if p else None
+            templates[k] = v if v and v[0] == 'struct' else None
+        return templates[k]
+    trick, start_flag, cluster = ('name', qbkey('TrickObject')), ('name', qbkey('CreatedAtStart')), qbkey('Cluster')
+    pieces = {qbkey('LevelGeometry'), qbkey('LevelObject')}
+    stripped = unstarted = 0
+    for n in arr[1]:
+        tmpl = [v[1] for k, v in n[1] if k is None and v[0] == 'name' and template(v[1])]
+        merged = [f for t in tmpl for f in template(t)[1]] + [f for f in n[1] if not (f[0] is None and f[1][0] == 'name' and f[1][1] in tmpl)]
+        own = dict((k, v) for k, v in merged if k)
+        bare = {v for k, v in merged if k is None and v[0] == 'name'}
+        cl = own.get(cluster)
+        dead_trick = cl is not None and cl[1] not in sectors and trick in bare
+        cls, nm = own.get(qbkey('Class')), own.get(qbkey('Name'))
+        dead_piece = cls is not None and cls[1] in pieces and start_flag in bare and nm and nm[1] not in sectors
+        if dead_trick or dead_piece:
+            drop = ({trick} if dead_trick else set()) | ({start_flag} if dead_piece else set())
+            n[1][:] = [(k, v) for k, v in merged
+                       if not (k is None and v in drop) and not (dead_trick and k == cluster)]
+            stripped += dead_trick
+            unstarted += dead_piece
+    print(f'trick objects without a piece in this level: {stripped} (TrickObject and Cluster removed); '
+          f'level pieces not here, no longer created at start: {unstarted}')
     trqb = d[:start] + qb2.encode_value(arr) + d[end:]
     open(os.path.join(out, 'tr.qb'), 'wb').write(trqb)
     print(f'nodes moved: {moved} of {len(places)}; red rope trigger on {ropes_set} rail nodes')
