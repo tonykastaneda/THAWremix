@@ -102,6 +102,34 @@ def event_counter(prefix, event, goal):
     ])
 
 
+def combo_watcher(prefix, goal, score):
+    """<prefix>_start/_poll/_stop: on the skater, wait for each combo to end and set the goal's
+    got_1 flag if the score it landed is at least `score` (a bail lands nothing)."""
+    in_combo = ['SkaterCurrentScorePotGreaterThan', 0]
+    dbg = (lambda t: [['create_panel_message', 'id', '=', 'hw_dbg7', 'text', '=', "'" + t]]) if os.environ.get('HW_DEBUG') else (lambda t: [])
+    return b''.join([
+        script(f'{prefix}_start', [['skater', ':', 'Obj_SpawnScript', f'{prefix}_poll']]),
+        script(f'{prefix}_poll', [['<hw_in_combo>', '=', 0],
+                                  ['while'],
+                                  ['if'] + in_combo,
+                                  ['<hw_in_combo>', '=', 1],
+                                  ['else'],
+                                  ['if', bytes([0x0E]), '<hw_in_combo>', '=', 1, bytes([0x0F])],
+                                  ['<hw_in_combo>', '=', 0],
+                                  ['wait', 2, 'gameframes'],
+                                  ] + dbg('combo landed') + [
+                                  ['if', 'SkaterLastScoreLandedGreaterThan', score - 1],
+                                  ] + dbg('combo target reached: flag set') + [
+                                  ['GoalManager_SetGoalFlag', 'Name', '=', tok_name(goal), 'got_1', 1],
+                                  ['endif'],
+                                  ['endif'],
+                                  ['endif'],
+                                  ['wait', 2, 'gameframes'],
+                                  ['repeat']]),
+        script(f'{prefix}_stop', [['skater', ':', 'Obj_KillSpawnedScript', 'Name', '=', f'{prefix}_poll']]),
+    ])
+
+
 def dot(param, axis):
     """Expression ( <param> . (x, y, z) ) as raw tokens."""
     return (bytes([0x0E, 0x2D]) + tok_name(param) + bytes([0x08, qb2.VEC]) + struct.pack('<3f', *axis)
@@ -248,8 +276,8 @@ def main():
 
     # goals
     ped = lambda v: places[v]  # noqa: E731
-    G = {k: qbkey(f'tr_goal_{k}') for k in ('counter7', 'gaps41', 'gaps42', 'highcombo5', 'gaps40', 'counter40', 'highcombo6',
-                                           'highcombo1', 'highcombo2', 'highcombo3')}
+    G = {k: qbkey(f'tr_goal_{k}') for k in ('counter7', 'gaps41', 'gaps42', 'gaps43', 'gaps40', 'counter40', 'gaps44',
+                                           'gaps45', 'gaps46', 'gaps47')}
 
     def common(text, view, who, pro_node, restart_node, child=None, first=False):
         pos, yaw = ped(pro_node)
@@ -260,15 +288,37 @@ def main():
         if not first and not os.environ.get('HW_UNLOCK_ALL'):  # testing aid: every goal open at once
             f.append(FLAG('Unlocked_By_Another'))
         if child:
-            f.append(('child', N(G[child])))
+            # the caveman lesson's parts are stages of one goal (THAW chains them with child too):
+            # winning a stage starts the next at once. Every other link is a reward_goal: a real
+            # win (only a goal without a child is ever marked won) that unlocks the next goal,
+            # whose giver you then go and talk to.
+            f.append(('child' if child in ('gaps41', 'gaps42') else 'reward_goal', N(G[child])))
         return f
 
     goals = []
-    # 2 sponsor challenge
-    goals.append(goal_call('AddGoal_HighCombo', [('version', I(5)), ('score', I(1500)), ('time', I(60))] + common(
-        'Sponsor challenge: land a 1,500 point combo', 'Go to the skateshop, win a sponsor challenge', 'Mindy',
-        'TRG_G_GAP16_Pro', 'TRG_G_GAP16_RestartNode', 'gaps40')))
-    # 3 kickflip over Ben Whofleck
+    combo_watchers = []
+    # testing aid: HW_COMBO_SCORE=100 lowers every combo target so automated play can reach them
+    test_score = int(os.environ.get('HW_COMBO_SCORE', 0))
+
+    def combo_goal(version, score, text, view, who, pro, restart, child):
+        """A landed combo of at least `score` wins (Remix's own high-combo goals are silent area
+        challenges that deactivate when a combo lands, so they cannot be given by a ped)."""
+        key = f'gaps{version}'
+        target = test_score or score
+        combo_watchers.append(combo_watcher(f'hw_combo{version}', G[key], target))
+        return goal_call('AddGoal_Gaps', [('version', I(version)), ('time', I(60)),
+                                          ('goal_flags', ('array', [N('got_1')])),
+                                          ('goal_start_script', N(f'hw_combo{version}_start')),
+                                          ('goal_success_Script', N(f'hw_combo{version}_stop')),
+                                          ('goal_deactivate_script', N(f'hw_combo{version}_stop'))]
+                         + ([('goal_success_Script', N('hw_dbg_won')), ('goal_deactivate_script', N('hw_dbg_deact'))] if os.environ.get('HW_DEBUG') else [])
+                         + common(text, view, who, pro, restart, child))
+
+    # 4 sponsor challenge
+    goals.append(combo_goal(43, 1500, 'Sponsor challenge: land a 1,500 point combo',
+                            'Go to the skateshop, win a sponsor challenge', 'Mindy',
+                            'TRG_G_GAP16_Pro', 'TRG_G_GAP16_RestartNode', 'gaps40'))
+    # 5 kickflip over Ben Whofleck
     goals.append(goal_call('AddGoal_Gaps', [('version', I(40)), ('time', I(60)),
                                             ('goal_flags', ('array', [N('got_1')])),
                                             ('goal_start_script', N('hw_ben_start')),
@@ -276,25 +326,23 @@ def main():
                                             ('goal_deactivate_script', N('hw_ben_stop'))] + common(
         'Do a Kickflip over Ben Whofleck', 'Kickflip Ben Whofleck', 'Ben Whofleck',
         'TRG_G_GAP17_Pro', 'TRG_G_GAP17_RestartNode', 'counter40')))
-    # 4 revert
+    # 6 revert
     goals.append(goal_call('AddGoal_Counter', [('version', I(40)), ('number', I(1)), ('time', I(120)),
                                                FLAG('use_hud_counter'), ('hud_counter_caption', S('Revert')),
                                                ('goal_start_script', N('hw_revert_start')),
                                                ('goal_success_Script', N('hw_revert_stop')),
                                                ('goal_deactivate_script', N('hw_revert_stop'))] + common(
         'Do a Revert: go up a quarter pipe and revert as you land back down', 'Meet Duane at the Dog and Cello',
-        'Duane', 'TRG_G_COUNTER4_Pro', 'TRG_G_COUNTER4_RestartNode', 'highcombo6')))
-    # 5 the punk
-    goals.append(goal_call('AddGoal_HighCombo', [('version', I(6)), ('score', I(3000)), ('time', I(60))] + common(
-        'Beat my score: land a 3,000 point combo', 'Get your stuff back', 'Joe Skater',
-        'TRG_G_GAP5_Pro', 'TRG_G_GAP5_RestartNode', 'highcombo1')))
-    # 6-8 wool protest
-    for v, score, child in ((1, 2000, 'highcombo2'), (2, 5000, 'highcombo3'), (3, 10000, None)):
-        goals.append(goal_call('AddGoal_HighCombo', [('version', I(v)), ('score', I(score)), ('time', I(60))] + common(
-            f'Land a {score:,} point combo', 'Stop the wool protest!', 'Mindy',
-            'TRG_G_GAP20_Pro', 'TRG_G_GAP20_RestartNode', child)))
+        'Duane', 'TRG_G_COUNTER4_Pro', 'TRG_G_COUNTER4_RestartNode', 'gaps44')))
+    # 7 get your stuff back (the punk)
+    goals.append(combo_goal(44, 3000, 'Beat my score: land a 3,000 point combo', 'Get your stuff back',
+                            'Joe Skater', 'TRG_G_GAP5_Pro', 'TRG_G_GAP5_RestartNode', 'gaps45'))
+    # 8 stop the wool protest (three stages; the third knocks down the dino head in THAW)
+    for v, score, child in ((45, 2000, 'gaps46'), (46, 5000, 'gaps47'), (47, 10000, None)):
+        goals.append(combo_goal(v, score, f'Land a {score:,} point combo', 'Stop the wool protest!', 'Mindy',
+                                'TRG_G_GAP20_Pro', 'TRG_G_GAP20_RestartNode', child))
 
-    helpers = b''.join([
+    helpers = b''.join(combo_watchers + [
         # Ben: while the skater is within radius of him, any flip trick wins
         script('hw_ben_start', [['TRG_G_GAP17_Pro', ':', 'Obj_SetInnerRadius', 150],
                                 ['TRG_G_GAP17_Pro', ':', 'Obj_SetOuterRadius', 170],
@@ -310,6 +358,20 @@ def main():
         script('hw_ben_stop', [['skater', ':', 'Obj_KillSpawnedScript', 'Name', '=', 'hw_ben_listen'],
                                ['TRG_G_GAP17_Pro', ':', 'Obj_ClearExceptions']]),
         event_counter('hw_revert', 'SkaterEnterRevert', G['counter40']),
+        script('hw_dbg_watch', [['while'],
+                                ['<hw_st>', '=', "'goal: inactive"],
+                                ['if', 'GoalManager_GoalIsActive', 'Name', '=', tok_name(qbkey('tr_goal_' + os.environ.get('HW_START_GOAL', 'none')))],
+                                ['<hw_st>', '=', "'goal: ACTIVE"],
+                                ['endif'],
+                                ['if', 'GoalManager_HasWonGoal', 'Name', '=', tok_name(qbkey('tr_goal_' + os.environ.get('HW_START_GOAL', 'none')))],
+                                ['<hw_st>', '=', "'goal: WON"],
+                                ['endif'],
+                                ['create_panel_message', 'id', '=', 'hw_dbg4', 'text', '=', '<hw_st>'],
+                                ['wait', 30, 'gameframes'],
+                                ['repeat']]),
+        script('hw_dbg_deact', [['create_panel_message', 'id', '=', 'hw_dbg5', 'text', '=', "'DEACTIVATED"]]),
+        script('hw_dbg_fail', [['create_panel_message', 'id', '=', 'hw_dbg6', 'text', '=', "'FAILED"]]),
+        script('hw_dbg_won', [['create_panel_message', 'id', '=', 'hw_dbg3', 'text', '=', "'GOAL WON"]]),
         script('hw_debug_start_goal', [['wait', 120, 'gameframes'],
                                        ['GoalManager_UnlockGoal', 'Name', '=', tok_name(qbkey('tr_goal_' + os.environ.get('HW_START_GOAL', 'none')))],
                                        ['GoalManager_ActivateGoal', 'Name', '=', tok_name(qbkey('tr_goal_' + os.environ.get('HW_START_GOAL', 'none')))]]),
@@ -408,6 +470,8 @@ def main():
             if os.environ.get('HW_SPAWN'):
                 lines.append(['spawnscript', 'hw_debug_teleport'])
             lines.append(['spawnscript', 'hw_debug_peds'])
+            if os.environ.get('HW_START_GOAL'):
+                lines.append(['spawnscript', 'hw_dbg_watch'])
             if os.environ.get('HW_START_GOAL'):  # testing aid: start one goal directly after load
                 lines.append(['spawnscript', 'hw_debug_start_goal'])
         body = script(slot, lines)[:-1]
@@ -425,7 +489,7 @@ def main():
                                               ('goal_flags', ('array', [N('got_1')]))] + common(
                 'Follow my line: get off your board (\\be), Caveman (\\be) back on, then jump and grind (\\b0) the red ropes in one combo',
                 'Learn from the Hollywood skaters', 'Hollywood Skater',
-                'TRG_G_COUNTER7_Pro', 'TRG_G_GAP7_RestartNode', 'highcombo5'))
+                'TRG_G_COUNTER7_Pro', 'TRG_G_GAP7_RestartNode', 'gaps43'))
             body = body.replace(bytes([qb2.NEWLINE, 0x24]), line + bytes([0x24]), 1)
         edits.append((s, e, body))
     new = bytearray()

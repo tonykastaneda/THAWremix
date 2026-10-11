@@ -362,3 +362,30 @@ the ropes (the unused training node `TRG_G_GAP7_RestartNode` moved there). Verif
 Caveman then grind does not count; walk, jump, Caveman (L in the air) straight into a rope grind
 (Caveman + FS 50-50) wins. The punk goal is retitled "Get your stuff back". Testing aid:
 `HW_START_GOAL=<type><version>` (e.g. gaps42) starts that goal 2 s after load.
+
+### Sponsor challenge, and why goals never counted as won
+
+- **`child` versus `reward_goal`.** In the THUG engine (`CGoal::Win`), only a goal with no `child`
+  is ever marked won. A goal with a child is a stage: winning it deactivates it and starts the
+  child at once, wherever its giver stands. The story chain used `child` everywhere, so no goal
+  after the caveman lesson could ever count as won. Now the three caveman parts stay stages (THAW
+  chains them with `child` too) and every other link is `reward_goal`, which unlocks the next goal
+  on a real win (`UnlockRewardGoals`).
+- **Combo goals.** Remix's `AddGoal_HighCombo` story goals are silent area challenges: started
+  from a ped, a landed combo deactivates them instead of winning. The sponsor challenge, the punk
+  and the three wool-protest stages are now gaps goals with a watcher on the skater: when a combo
+  ends, `SkaterLastScoreLandedGreaterThan` decides whether `got_1` is set. Verified with a
+  100-point test target: "combo target reached", the game's goal-complete banner, and
+  `GoalManager_HasWonGoal` true. Shipped targets: 1,500 sponsor, 3,000 the punk, 2,000 / 5,000 /
+  10,000 the wool protest. Testing aid: `HW_COMBO_SCORE=<n>` overrides every target.
+- **Goal peds were never missing.** All six show up; they were locked behind goals that could not
+  be won.
+
+Background testing (`tools/ppsspp_ws.py`, `work/run_bg.py`): a portable test copy of PPSSPP in
+`work/ppsspp_test` (own settings: D3D11, 1x, muted, remote debugger on port 45678) launches on a
+separate hidden Windows desktop, so it is never drawn on the user's screen and cannot take focus;
+buttons and screenshots go through PPSSPP's WebSocket debugger. Lessons: screenshots need the CPU
+paused (`cpu.stepping`), reading GPU buffers that way under Vulkan lost the device, a second
+debugger connection after one closed hung, so a whole test runs on one connection, and any helper
+process started without a console must not start console programs (each opened a visible window).
+The user's own PPSSPP and its settings are never touched.
