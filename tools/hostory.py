@@ -258,6 +258,12 @@ def main():
                 float(d.get('Angles', [0, 0, 0])[1]) if yaw is None else yaw)
 
     places = {k: thaw_place(v) for k, v in PLACES}
+    # testing aid: HW_SPAWN_NODE="<PLACES key> dx dz" spawns there (HW_SPAWN), facing the node's way
+    if os.environ.get('HW_SPAWN_NODE'):
+        key, dx, dz = os.environ['HW_SPAWN_NODE'].split()
+        pos, yaw = places[key]
+        os.environ['HW_SPAWN'] = '%f %f %f %f' % (pos[0] + float(dx), pos[1], pos[2] + float(dz), yaw)
+        print('spawn near', key, os.environ['HW_SPAWN'])
 
     # node moves
     d = open(os.path.join(outdir_build, 'tr.qb'), 'rb').read()

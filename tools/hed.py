@@ -2,7 +2,7 @@
 
   hed.py list <hed> [--sectors]
   hed.py extract <hed> <wad> <outdir> [--sectors] [--match <substring>]
-  hed.py replace <hed> <wad> <archive path> <new file>
+  hed.py replace <hed> <wad> <archive path> <new file> [--sectors]
 
 Each index entry is offset, size, then a NUL-terminated path padded to four bytes. THUG2 Remix
 (PSP) stores byte offsets; THAW PS2 stores 2048-byte sector numbers (--sectors).
@@ -28,8 +28,8 @@ def read_hed(path, sectors=False):
     return out
 
 
-def replace(hed, wad, name, src):
-    """Byte-offset archives only. Writes in place when the file fits its 2048-padded slot, otherwise
+def replace(hed, wad, name, src, sectors=False):
+    """Writes in place when the file fits its 2048-padded slot, otherwise
     appends to the wad; either way the index entry gets the new offset and size. Some files are
     listed twice; every entry with the name is pointed at the one new copy."""
     data = bytearray(open(hed, 'rb').read())
@@ -40,6 +40,8 @@ def replace(hed, wad, name, src):
         if off == 0xFFFFFFFF:
             break
         end = data.index(b'\0', p + 8)
+        if sectors:
+            off *= 2048
         if data[p + 8:end].decode('latin-1').lower() == name.lower():
             if written is None:
                 with open(wad, 'r+b') as f:
@@ -49,7 +51,7 @@ def replace(hed, wad, name, src):
                     f.seek(off)
                     f.write(new + bytes(-len(new) % 2048))
                 written = off
-            struct.pack_into('<II', data, p, written, len(new))
+            struct.pack_into('<II', data, p, written // 2048 if sectors else written, len(new))
             print(f'{name}: {size} -> {len(new)} bytes at {written:#x}')
         p = (end + 4) & ~3
     if written is None:
@@ -60,7 +62,7 @@ def replace(hed, wad, name, src):
 def main():
     args = sys.argv[1:]
     if args[0] == 'replace':
-        return replace(*args[1:5])
+        return replace(*args[1:5], sectors='--sectors' in args)
     sectors = '--sectors' in args
     match = None
     if '--match' in args:

@@ -1,14 +1,10 @@
-/THAW CLEAN/
-/BMXXX/
+# local inputs and working data (game images, unpacked files, builds); see README
+/isos/
+/THAW CLEAN
 /extracted/
-/ref/
 /bin/
-target/
+/ghidra/proj*/
+work/
 *.gzf
 *.rep/
-.claude/away.flag
-/ghidra/proj/
 __pycache__/
-/THAWremix/
-/ghidra/proj_remix/
-work/
