@@ -475,12 +475,14 @@ def convert_col(d, delta16, disabled, moves=None, start_killed=()):
     return bytes(out)
 
 
-def append_col_objects(d, objs):
-    """Remix v10 collision with extra objects appended: float vertices, small faces (so the
+def append_col_objects(d, objs, H=0x20):
+    """v10 collision with extra objects appended: float vertices, small faces (so the
     one-byte-per-large-face block after the faces is untouched) and a one-leaf BSP each. Every
     block grows at its end, so existing objects' offsets stay valid. objs: dicts with checksum,
-    verts (n, 3) world, faces [(flags, terrain, a, b, c)], tail; at most 256 vertices each."""
-    H, OBJ = 0x20, 0x40
+    verts (n, 3) world, faces [(flags, terrain, a, b, c)], tail; at most 256 vertices each.
+    H is the header size: 0x20 for Remix, 0x50 for THAW's own files (P8), whose extra 0x30 bytes
+    (grid dims, world bounds) are kept."""
+    OBJ = 0x40
     ver, nobj, tverts, tlf, tsf, tlv, tsv, pad = struct.unpack_from('<8i', d, 0)
     bv = (H + OBJ * nobj + 15) & ~15
     bi = bv + tlv * 12 + tsv * 6
@@ -514,7 +516,7 @@ def append_col_objects(d, objs):
         tverts += len(v)
         tlv += len(v)
         tsf += len(fs)
-    out = bytearray(struct.pack('<8i', ver, nobj, tverts, tlf, tsf, tlv, tsv, pad)) + objects
+    out = bytearray(struct.pack('<8i', ver, nobj, tverts, tlf, tsf, tlv, tsv, pad)) + d[0x20:H] + objects
     out += bytes(-len(out) % 16) + verts + inten
     out += bytes(-len(out) % 4) + faces + large
     out += bytes(-len(out) % 4) + struct.pack('<i', len(nodes)) + nodes + fidx
@@ -631,6 +633,8 @@ def main():
     ap.add_argument('--tess', type=float, default=400, help='longest triangle edge in inches near the playable area')
     ap.add_argument('--max-radius', type=float, default=0, help='drop meshes with a larger bounding radius')
     ap.add_argument('--no-props', action='store_true', help='leave out GameObject props')
+    ap.add_argument('--col-base', help='also write <name>.props.col: this collision file (THAW PS2, for Project 8) '
+                                       'with the props appended')
     ap.add_argument('--qb', help="target level's .qb (its node array gets the zone's rails)")
     ap.add_argument('--pre', help="target level's scripts .pre (rebuilt holding the new .qb)")
     ap.add_argument('--pre-entry', help=r'path of the .qb inside the .pre, e.g. levels\TR\TR.qb')
@@ -670,6 +674,10 @@ def main():
         col = append_col_objects(col, [dict(o, verts=o['verts'] + delta) for o in prop_cols])
     open(os.path.join(a.outdir, f'{a.name}.col.ps2'), 'wb').write(col)
     print(f'{a.name}.col.ps2 {len(col)} bytes, {len(disabled)} pieces disabled, {len(moves)} level objects placed')
+    if a.col_base:  # Project 8: THAW's own (PS2) collision, which P8 loads as is, plus the props
+        pcol = append_col_objects(open(a.col_base, 'rb').read(), [dict(o, verts=o['verts'] + delta) for o in prop_cols], H=0x50)
+        open(os.path.join(a.outdir, f'{a.name}.props.col'), 'wb').write(pcol)
+        print(f'{a.name}.props.col {len(pcol)} bytes: {os.path.basename(a.col_base)} + {len(prop_cols)} prop objects')
 
     if a.qb:
         import qb2

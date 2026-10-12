@@ -749,3 +749,9 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
 - p8zone.py --no-spawn takes Class or Class:Type entries.
 - The props those GameObjects stand for (bouncy chairs, tables, flower pots, SKATE/COMBO letters,
   the tape, CTF flags) are created later by goals; they need THAW models converted to P8's format.
+- Prop collision, as in the Remix build: `thaw2psp.py build ... --col-base <THAW PS2 z_ho .col>`
+  also writes `<name>.props.col`, THAW's own collision (which P8 loads as is) with the 67 baked
+  GameObject props appended (`append_col_objects`, now taking the header size: 0x50 for THAW's
+  files, whose grid/bounds words are kept; 0x20 for Remix). The converter's Remix-format .col.ps2
+  crashes vanilla in collision code (module 0xe2f00) and is not used. `p8zone.py --col` takes the
+  props file. Loads and skates; bumping into a prop is untested.

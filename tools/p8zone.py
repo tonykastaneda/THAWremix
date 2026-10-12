@@ -250,6 +250,8 @@ def main():
     ap.add_argument('--template', help="zone of slot_pak when it is not --slot (e.g. z_houses's pak for a new z_ho)")
     ap.add_argument('--strip', action='store_true', help="leave out the slot pak's own props (TEMPLATE_PROPS)")
     ap.add_argument('--no-peds', action='store_true', help="keep the slot's peds file")
+    ap.add_argument('--col', help="collision to use instead of THAW's own: thaw2psp's .col.ps2, which adds the "
+                                  "GameObject props it bakes into the level (as in the Remix build)")
     ap.add_argument('--keep-scripts', action='store_true',
                     help="keep the slot's zone scripts (THAW's crash vanilla P8 as they stand)")
     ap.add_argument('--spawn-peds', action='store_true', help="keep THAW's peds and vehicles CreatedAtStart")
@@ -276,7 +278,7 @@ def main():
         if k == '.geom':
             payloads[i] = write_geom(lvl, sblob[e['offset']:e['offset'] + e['size']])
         elif k == '.col':
-            payloads[i] = thaw('.col')
+            payloads[i] = open(a.col, 'rb').read() if a.col else thaw('.col')
         elif k == '.nqb' and n.endswith(f'{tz}.qb.psp'):
             payloads[i], fixed = fix_blips(rename(thaw('.nqb', ''), renames))
             print(f'compass blips moved to P8 types: {fixed}')
