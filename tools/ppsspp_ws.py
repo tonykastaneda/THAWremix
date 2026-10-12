@@ -8,6 +8,7 @@ test copy's own process is ever killed.
 
   ppsspp_ws.py start <game path>
   ppsspp_ws.py stop
+  ppsspp_ws.py register                     once: the scheduled task used to launch from an SSH login
   ppsspp_ws.py press <button>[+<button>...] [ms]
   ppsspp_ws.py seq "<step>,<step>,..."     steps: wait:<ms> | <buttons>[:<ms>] | shot:<png> | stick:<x>:<y>:<ms>
   ppsspp_ws.py shot <png>                   the emulated PSP framebuffer
@@ -191,13 +192,69 @@ NO_WINDOW = 0x08000000  # CREATE_NO_WINDOW, for every process the tools start
 DESKTOP = 'thx_ppsspp_test'
 
 
+TASK = 'THX PPSSPP test'  # scheduled task (run only when logged on): launches in the desktop session
+REQFILE = EXE + '.req'
+
+
+def session_id():
+    import ctypes
+    sid = ctypes.c_ulong()
+    ctypes.windll.kernel32.ProcessIdToSessionId(os.getpid(), ctypes.byref(sid))
+    return sid.value
+
+
 def start(game):
     """Launches the test copy on its own hidden desktop: its windows (and any error dialog) are never
-    drawn on the user's screen and can never take focus. It also starts minimized there."""
+    drawn on the user's screen and can never take focus. It also starts minimized there.
+    From session 0 (an SSH login: no display, no audio, D3D11 fails) the launch goes through the
+    scheduled task TASK, which runs `ppsspp_ws.py launch` in the user's desktop session."""
+    kill()
+    log = os.path.join(os.path.dirname(EXE), 'ppsspp.log')
+    for _ in range(20):  # PPSSPP appends; one log per boot (it reached 43 GB once)
+        try:
+            if os.path.exists(log):
+                os.replace(log, log[:-4] + '.prev.log')
+            break
+        except PermissionError:  # a just-killed emulator can hold it for a moment
+            time.sleep(0.5)
+    if session_id() == 0:
+        with open(REQFILE, 'w', encoding='utf-8') as f:
+            f.write(os.path.abspath(game))
+        r = subprocess.run(['schtasks', '/run', '/tn', TASK], capture_output=True, text=True,
+                           creationflags=NO_WINDOW)
+        if r.returncode:
+            raise OSError(f'schtasks /run {TASK}: {r.stdout}{r.stderr} (register it: ppsspp_ws.py register)')
+        for _ in range(40):
+            if os.path.exists(PIDFILE):
+                break
+            time.sleep(0.25)
+    else:
+        launch(game)
+    for _ in range(60):
+        try:
+            WS().s.close()
+            return 'started'
+        except OSError:
+            time.sleep(0.5)
+    raise RuntimeError('debugger did not come up')
+
+
+def register():
+    """Creates TASK (once): pythonw runs `ppsspp_ws.py launch` as this user in the desktop session."""
+    pyw = os.path.join(os.path.dirname(sys.executable), 'pythonw.exe')
+    ps = (f"$a = New-ScheduledTaskAction -Execute '{pyw}' -Argument '\"{os.path.abspath(__file__)}\" launch';"
+          f"$p = New-ScheduledTaskPrincipal -UserId ([Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited;"
+          f"$s = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries "
+          f"-ExecutionTimeLimit (New-TimeSpan -Minutes 1) -MultipleInstances IgnoreNew;"
+          f"Register-ScheduledTask -TaskName '{TASK}' -Action $a -Principal $p -Settings $s -Force | Out-Null")
+    subprocess.run(['powershell', '-NoProfile', '-Command', ps], check=True, creationflags=NO_WINDOW)
+
+
+def launch(game):
+    """The launch itself, in the current session: hidden desktop, PPSSPP on it, PIDFILE."""
     import ctypes
     from ctypes import wintypes
     k, u = ctypes.windll.kernel32, ctypes.windll.user32
-    kill()
     u.CreateDesktopW.restype = wintypes.HANDLE
     if not u.CreateDesktopW(DESKTOP, None, None, 0, 0x10000000, None):  # GENERIC_ALL
         raise OSError('CreateDesktop failed')
@@ -221,26 +278,12 @@ def start(game):
     si.wShowWindow = 4  # SW_SHOWNOACTIVATE; on the hidden desktop it is never drawn on the user's screen
     pi = PI()
     log = os.path.join(os.path.dirname(EXE), 'ppsspp.log')
-    for _ in range(20):  # PPSSPP appends; one log per boot (it reached 43 GB once)
-        try:
-            if os.path.exists(log):
-                os.replace(log, log[:-4] + '.prev.log')
-            break
-        except PermissionError:  # a just-killed emulator can hold it for a moment
-            time.sleep(0.5)
     cmd = ctypes.create_unicode_buffer(f'"{EXE}" "{game}" --log="{log}"')
     if not k.CreateProcessW(None, cmd, None, None, False, NO_WINDOW, None, os.path.dirname(EXE),
                             ctypes.byref(si), ctypes.byref(pi)):
         raise OSError(f'CreateProcess failed: {k.GetLastError()}')
     with open(PIDFILE, 'w') as f:
         f.write(str(pi.dwProcessId))
-    for _ in range(60):
-        try:
-            WS().s.close()
-            return 'started'
-        except OSError:
-            time.sleep(0.5)
-    raise RuntimeError('debugger did not come up')
 
 
 def run_seq(ws, steps):
@@ -268,6 +311,14 @@ if __name__ == '__main__':
     cmd = sys.argv[1]
     if cmd == 'start':
         print(start(sys.argv[2]))
+    elif cmd == 'launch':  # run by TASK in the desktop session
+        with open(REQFILE, encoding='utf-8') as f:
+            game = f.read().strip()
+        os.remove(REQFILE)
+        launch(game)
+    elif cmd == 'register':
+        register()
+        print('registered', TASK)
     elif cmd == 'stop':
         kill()
         print('stopped')
