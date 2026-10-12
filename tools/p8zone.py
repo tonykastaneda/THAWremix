@@ -134,8 +134,9 @@ def unspawn(data, zone, no_spawn=NO_SPAWN):
     shared = {k: v for k, (t, v) in items.items() if t == 10}
     arr = items[qbkey(f'{zone}_NodeArray')][1]
     n, base = u(arr + 4), u(arr + 8)
-    cls_key, cas = qbkey('Class'), qbkey('CreatedAtStart')
-    classes = {qbkey(c) for c in no_spawn}
+    cls_key, type_key, cas = qbkey('Class'), qbkey('Type'), qbkey('CreatedAtStart')
+    # entries are a class, or class:type for one type of it (e.g. GameObject:Ghost)
+    classes = {(qbkey(c.split(':')[0]), qbkey(c.split(':')[1]) if ':' in c else None) for c in no_spawn}
     structs = set()
     for i in range(n):
         s = u(base + 4 * i)
@@ -151,7 +152,9 @@ def unspawn(data, zone, no_spawn=NO_SPAWN):
         while f:
             fields.append(f)
             f = u(f + 12)
-        if next((u(f + 8) for f in fields if u(f + 4) == cls_key), None) not in classes:
+        cls = next((u(f + 8) for f in fields if u(f + 4) == cls_key), None)
+        typ = next((u(f + 8) for f in fields if u(f + 4) == type_key), None)
+        if (cls, None) not in classes and (cls, typ) not in classes:
             continue
         for f in fields:
             if u(f + 4) == 0 and u(f + 8) == cas:

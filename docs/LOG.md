@@ -727,8 +727,25 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   `images\raw\icon\icon0/icon1/pic1.png` (save data). SND0.AT3 (P8's XMB music) is kept aside.
 - Intro: THAW's atvilogo, ns_logo and g_intro replace P8's in `movies\start`; P8's Page 44 and
   Shaba logos stay between them.
+- Revised after review: the boot/legal screen is THAW's own title (as in the Remix build), not the
+  Remix logo; the Remix logo is only for the XMB (disc ICON0/PIC1) and the save data icons.
 - PPSSPP (strict): intro plays (Activision, Page 44, Shaba, Neversoft, THAW intro); autolaunch shows
   THAW's generic load screen, then P8's own career-opening cutscene plays in Hollywood. The legal
   screen does not show under PPSSPP for vanilla's own TGA either, so the new title is unverified;
   the Hollywood load screen shows only when Houses loads from the menus (not yet driven).
 - `work/p8v/build.py` does all of this from pristine copies.
+
+### Hollywood's nodes on vanilla P8: only GameObjects must stay uncreated
+
+- Redone with autolaunch (the earlier menu-driven class bisection was unreliable): with Pedestrian,
+  Vehicle and GameObject left uncreated, Hollywood loads and skates with its LevelObjects and
+  LevelLights created. GameObject alone is the problem: its CreatedAtStart ones are Ghost triggers
+  (bus, skate shop, barber, clothing shop) and four Transition_Markers; without the markers it still
+  crashes in scene setup (module 0xae674), without the Ghosts it hangs. They name THAW models and
+  types P8 does not have. The Remix build never used THAW's GameObjects either (hostory.py places
+  selected nodes; the shop goals use a distance check at the doors).
+- The "no level objects in the .psp_level" theory was wrong: the converted level loads with zero
+  objects once GameObjects are off (a placeholder object changed nothing and was dropped).
+- p8zone.py --no-spawn takes Class or Class:Type entries.
+- The props those GameObjects stand for (bouncy chairs, tables, flower pots, SKATE/COMBO letters,
+  the tape, CTF flags) are created later by goals; they need THAW models converted to P8's format.

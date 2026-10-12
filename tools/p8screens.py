@@ -3,7 +3,7 @@
   p8screens.py <THAW install> <outdir> [--vanilla] [--logo <png>] [<P8 screen>=<THAW screen> ...]
 
 Writes the files at their archive paths under <outdir> (patch each with hed.py replace ... --sectors);
-with --logo, also the boot title and icons built from that logo, and <outdir>\\PSP_GAME\\ICON0.PNG,
+with --logo, also the XMB/save icons built from that logo (the boot title stays THAW's own), and <outdir>\\PSP_GAME\\ICON0.PNG,
 PIC1.PNG for the disc.
 
 Vanilla P8 v1.00 (--vanilla): load screens are images\\loadscrn_<name>.img.psp and, again,
@@ -66,16 +66,6 @@ def logo_on_black(logo, size, width, top=None):
     return out
 
 
-def title(install, logo):
-    """The logo on black above THAW's legal text, lifted from its title screen (white text only)."""
-    out = logo_on_black(logo, (480, 272), 410, 14)
-    band = np.array(thaw_screen(install, "x")).astype(float)[200:254]  # the five lines of legal text
-    a = np.clip((band.mean(2) - 70) / (200 - 70), 0, 1)
-    txt = np.dstack([np.full(a.shape, 235)] * 3 + [a * 255]).astype(np.uint8)
-    out.alpha_composite(Image.fromarray(txt, "RGBA"), (0, 212))
-    return out.convert('RGB')
-
-
 def write(out, rel, data):
     path = os.path.join(out, *rel.split('\\'))
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -99,13 +89,13 @@ def main():
     for rel, thaw in screens.items():
         write(out, rel + '.img.psp', make(thaw_screen(install, thaw)))
         print(f'{rel} <- {thaw}')
-    boot = title(install, logo) if logo else thaw_screen(install, 'x')
+    boot = thaw_screen(install, 'x')  # THAW's own title and legal text, as in the Remix build
     for name in BOOT:
         boot.save(write(out, rf'{LEGAL_DIR}\{name}.tga', b''), compression=None, orientation=-1)
-    print('boot title <-', 'logo' if logo else 'THAW title')
-    if logo:
-        if vanilla:  # the title card shown with the boot screen
-            write(out, r'images\raw\us\loadscrn_us\loadscrn_x.img.psp', make(boot))
+    if vanilla:  # the title card shown with the boot screen
+        write(out, r'images\raw\us\loadscrn_us\loadscrn_x.img.psp', make(boot))
+    print('boot title <- THAW title')
+    if logo:  # the Remix logo is for the XMB only: game icon and background, save data icons
         icon = logo_on_black(logo, (144, 80), 136).convert('RGB')
         pic = logo_on_black(logo, (480, 272), 400).convert('RGB')
         for rel, im in ((rf'{ICON_DIR}\icon0.png', icon), (rf'{ICON_DIR}\icon1.png', icon), (rf'{ICON_DIR}\pic1.png', pic),
