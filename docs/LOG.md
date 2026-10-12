@@ -1020,3 +1020,7 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   Save` runs before it, so the crash may come from check_card in game (in the front end it works).
   Next: break on the CFunc of check_card's card query, or call UnloadAnimsAndCreateMemCardPools
   before check_card and test.
+- Tried: check_card skipped in the pause save path: still crashes, so it is not check_card. The
+  pools are pushed in launch_files_menu; the fault may be inside the files menu/save itself under
+  the THAW front end. Next: break at 0x08b38b00 with ra logged after Save Game is pressed (start
+  the breakpoint from the pause menu) and walk the stack. (Experiment not kept.)
