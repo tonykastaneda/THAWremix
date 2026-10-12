@@ -1101,8 +1101,8 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
     COIM heap 86 KB used (empty before): about 29 KB per ped there.
   - Every non-pigeon ped on (21 CreatedAtStart flips, shared structs included; Rick Thorne, Murphy,
     the barber and Boone mapped to Ped_DVGuy): loads, no faults; TopDown 1,315,392 (-187 KB), COIM
-    50 KB free of 652 KB (about 21 peds' worth), AnimHeap 2 KB free of 128 KB. Peds beyond what
-    COIM holds are not created (no crash).
+    50 KB free of 652 KB (about 21 peds' worth), AnimHeap 2 KB free of 128 KB. Likely (not counted:
+    estimated from COIM use) peds beyond what COIM holds are not created, with no crash.
 - So with P8 stand-in models about 20 peds fit at once, bounded by the COIM heap (and AnimHeap close
   behind); each distinct THAW model would also need room in PedParts (full now). Cars need their
   models converted or another P8 level's.
