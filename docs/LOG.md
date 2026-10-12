@@ -950,3 +950,6 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   `sky = "Default_sky"` after `level` (THAW's Level_Z_HO names TestLevel_Sky, which load_level turns
   into default_sky; P8 has skies\default_sky). PPSSPP: Free Skate and Story show a daytime sky with
   clouds where it was black; no faults.
+- The ambient track the map data displaced is back (`addfield ... Name ambient_track
+  music\vag\backgrounds\z_houses_bg`, P8's Houses loop). Story and Free Skate load without faults;
+  the sound itself is not checked (screenshots only).
