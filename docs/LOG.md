@@ -980,3 +980,12 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
 - To do: shop entry (barber/clothing via CAS, as in Remix), THAW cutscenes and in-game scenes
   (character paks), THAW ped and prop models, GameObjects (shops, bus, transition markers),
   mission collision/scenes, the rest of the story beyond Hollywood.
+
+### Open: saving in game crashes
+
+- The story's save prompt "Yes", and Save Game in the pause menu, both crash (module 0x334b00, null
+  + 0x10). The prompt's Yes handler was P8's tab-UI state script (0x9510a3cb); it is now THAW's
+  `launch_ingame_menu_save_game_sequence` (ingame_confirm_save's default), which still crashes, so
+  the fault is further on (P8's memcard UI under the THAW front end?). Saving from the main menu's
+  Options works. Answer No at the prompt for now. Next: trace with tools/p8trace.py (start it at
+  the pause menu so the breakpoints do not slow the story start).
