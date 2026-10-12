@@ -126,8 +126,10 @@ def main():
         if v['pc'] not in bps:
             emit('stopped at %08x' % v['pc'])
             return False
+        st = read(v['sp'], 0x100)
+        chain = ' '.join('%08x' % x for x in struct.unpack('<64I', st) if BASE <= x < BASE + 0x240000)
         try:
-            emit(f"{bps[v['pc']]} {params(v['a0'])}")
+            emit(f"{bps[v['pc']]} {params(v['a0']) if v['a0'] >= 0x08000000 else ''} [ra {v['ra']:08x}; stack {chain[:200]}]")
         except Exception as ex:  # keep going
             emit(f"{bps[v['pc']]} ? {ex}")
         ws.call({'event': 'cpu.resume'})
