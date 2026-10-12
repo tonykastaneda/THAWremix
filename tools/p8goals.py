@@ -17,6 +17,7 @@ goal_load_pak prefix and suffix (start, gameplay, success, fail); P8's goal_load
 path from a missing pak_short_name and LoadPak gets no name (a null file, module 0xf480).
 """
 import os
+import re
 import struct
 import sys
 
@@ -24,6 +25,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 import p8qb  # noqa: E402
 import p8zone  # noqa: E402
 import pak  # noqa: E402
+import qb  # noqa: E402
 
 NAME, EQ, NL, STRING, IF, NOT, ENDIF, ARG = 0x16, 0x07, 0x01, 0x1B, 0x47, 0x39, 0x28, 0x2D
 
@@ -158,12 +160,16 @@ def zone_rekey(pak_path, script, old, new):
 
 # THAW mission pak entries kept: node array, scripts and peds (THAW's QB, which P8 reads as is).
 # Its collision (trigger boxes) crashes without scene geometry behind it (module 0x18e330).
-# Models, textures and animations are PS2 formats (not converted yet).
+# Models, textures and animations are PS2 formats (not converted yet). Their peds' profiles
+# (mission-local M_Ped_* and the like, built from THAW parts) become Ped_HippieF01 (Mindy) or Ped_DVGuy,
+# which this zone can draw; otherwise ped creation fails ('Ped has no skeleton!', a crash).
 KEEP = {'.qb', '.nqb', '.sqb'}
 
 
 def missions(thaw_data, out, empty_level, prefixes):
     level = open(empty_level, 'rb').read()
+    if not qb.NAMES:  # key names, to find 'profile' fields (extracted/dbg, as qb.py's own main)
+        qb.load_names(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'extracted', 'dbg'))
     root = os.path.join(thaw_data, 'missions', 'worldzones')
     made = []
     for m in prefixes:
@@ -172,9 +178,20 @@ def missions(thaw_data, out, empty_level, prefixes):
             src = os.path.join(root, m, part, f'{part}.pak.ps2')
             if not os.path.exists(src):
                 continue
-            ents, _ = p8zone.load_pak(src)
+            ents, blob = p8zone.load_pak(src)
             drop = {i for i, e in enumerate(ents) if pak.EXT.get(e['type']) not in KEEP}
-            d = bytearray(p8zone.write_pak(src, {}, drop))
+            payloads = {}
+            for i, e in enumerate(ents):  # peds: profiles P8 can draw here (see p8zone.PROFILES)
+                if i in drop or not (e['name'] or '').lower().endswith('.qb.ps2'):
+                    continue
+                d0 = blob[e['offset']:e['offset'] + e['size']]
+                profs = set(re.findall(r"'profile', '\$([^']+)'", repr(qb.QB(d0).items())))
+                for pr in profs:
+                    to = 'Ped_HippieF01' if 'mindy' in pr.lower() else 'Ped_DVGuy'
+                    d0 = d0.replace(struct.pack('<I', p8qb.key(pr)), struct.pack('<I', pak.qbkey(to)))
+                if profs:
+                    payloads[i] = d0
+            d = bytearray(p8zone.write_pak(src, payloads, drop))
             for e in pak.read_entries(bytes(d))[0]:
                 if e['flags'] & 0x20:  # name: .ps2 -> .psp (keys stay THAW's)
                     at = e['entry_pos'] + 0x20

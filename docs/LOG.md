@@ -953,3 +953,12 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
 - The ambient track the map data displaced is back (`addfield ... Name ambient_track
   music\vag\backgrounds\z_houses_bg`, P8's Houses loop). Story and Free Skate load without faults;
   the sound itself is not checked (screenshots only).
+
+### More goals checked with P8V_TESTGOAL
+
+- Sponsor challenge (`z_ho_goal_gaps31`): runs at the skate shop ("Do a Sponsor Challenge").
+- High combo (`z_ho_goal_highcombo`): crashed with 'Ped has no skeleton!' (ScriptAssert from
+  ped_add_components): its mission pak creates peds with mission-local profiles (M_Ped_Cop,
+  M_ZHOHIGHCOMBO_start_Ped_Bum01, ...) built from THAW parts. `p8goals.py missions` now maps every
+  ped profile in the mission paks to Ped_HippieF01 (Mindy) or Ped_DVGuy. The goal then runs ("Land a
+  2000 point combo", timer). Default build re-checked: story start to the caveman lesson, no faults.
