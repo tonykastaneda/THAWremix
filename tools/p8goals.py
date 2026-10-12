@@ -114,7 +114,50 @@ def skip_igc(code):
     return head + start_block + end_block + tail
 
 
+def skip_cutscene(code):
+    """game_progress_process_cutscene up to its PlayCutscene call (unpausegame, music, the intro
+    restart node), then SpawnScriptLater game_progress_process_status params = { wait_time = 1 } in
+    place of the scene: PlayCutscene's exitScript does that once the scene ends (the atom counts as
+    done when no cutscene plays; its next UpdateAtoms must come after the atom has started, and
+    while the game is paused spawned scripts wait). THAW's story cutscenes (cutscenes/HO_2.cut, ...)
+    are not on P8's disc."""
+    import qb2
+    at = next(o for o, t, pl in qb2.tokens(code) if t == NAME and pl == struct.pack('<I', pak.qbkey('PlayCutscene')))
+    body = (name('SpawnScriptLater') + name('game_progress_process_status') + name('params') + bytes([EQ, 0x03]) +
+            name('wait_time') + bytes([EQ, 0x17]) + struct.pack('<i', 1) + bytes([0x04, NL, 0x24]))
+    return code[:at] + body
+
+
+def spawn_progress(code):
+    """The script, then SpawnScriptLater game_progress_process_status params = { wait_time = 1 } at
+    its end: game_progress_save_prompt ends its atom, and without another UpdateAtoms the next one
+    (the caveman lesson) never starts."""
+    assert code[-1] == 0x24
+    return code[:-1] + (name('SpawnScriptLater') + name('game_progress_process_status') + name('params') +
+                        bytes([EQ, 0x03]) + name('wait_time') + bytes([EQ, 0x17]) + struct.pack('<i', 1) +
+                        bytes([0x04, NL, 0x24]))
+
+
+def zone_rekey(pak_path, script, old, new):
+    """One checksum swapped for another in one script of a zone pak's <zone>_scripts.qb (in place)."""
+    ents, blob = p8zone.load_pak(pak_path)
+    zone = os.path.basename(pak_path).lower().split('.')[0]
+    i, e = next((i, e) for i, e in enumerate(ents) if (e['name'] or '').lower().endswith(chr(92) + zone + '_scripts.qb.psp'))
+    d = blob[e['offset']:e['offset'] + e['size']]
+    k = pak.qbkey(script)
+    v, code = script_code(d, k)
+    o, n = struct.pack('<I', p8qb.key(old)), struct.pack('<I', p8qb.key(new))
+    if not code.count(o):
+        raise SystemExit(f'{old} not in {script}')
+    code = code.replace(o, n)
+    d = p8qb.swap_script(d, k, d[v:v + 4] + struct.pack('<2I', len(code), len(code)) + code)
+    out = p8zone.write_pak(pak_path, {i: d})
+    open(pak_path, 'wb').write(out)
+    print(f'{os.path.basename(pak_path)} {script}: {old} -> {new}')
+
+
 # THAW mission pak entries kept: node array, scripts and peds (THAW's QB, which P8 reads as is).
+# Its collision (trigger boxes) crashes without scene geometry behind it (module 0x18e330).
 # Models, textures and animations are PS2 formats (not converted yet).
 KEEP = {'.qb', '.nqb', '.sqb'}
 
@@ -154,6 +197,14 @@ def main():
     elif sys.argv[1] == 'igcskip':
         c = edit_script(sys.argv[2], sys.argv[3], 'igc_player.qb.psp', 'igc_player_run', skip_igc)
         print(f'igc_player_run: scene skipped ({len(c)} bytes)')
+    elif sys.argv[1] == 'cutsceneskip':
+        c = edit_script(sys.argv[2], sys.argv[3], 'career_scripts.qb.psp', 'game_progress_process_cutscene', skip_cutscene)
+        print(f'game_progress_process_cutscene: cutscene skipped ({len(c)} bytes)')
+    elif sys.argv[1] == 'saveprompt':
+        c = edit_script(sys.argv[2], sys.argv[3], 'career_scripts.qb.psp', 'game_progress_save_prompt', spawn_progress)
+        print(f'game_progress_save_prompt: progression goes on after it ({len(c)} bytes)')
+    elif sys.argv[1] == 'zonerekey':  # <zone .pak.psp> <script> <old> <new>
+        zone_rekey(*sys.argv[2:6])
     elif sys.argv[1] == 'missions':
         missions(sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5:])
 

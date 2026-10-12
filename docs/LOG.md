@@ -886,3 +886,22 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   the goal star on the pause map, View Missions "Go to the barber shop."
 - Next: the barber and clothing goals finish by walking into the shop (THAW's Ghost GameObjects,
   which P8 cannot create): as in the Remix build, a door check opening Create-A-Skater.
+
+### Story progression through the opening atoms (P8V_GOALS)
+
+- The barber and clothing goals (`z_ho_goal_gaps15`/`gaps30`) are won by their mission's door
+  trigger in THAW (a LevelGeometry trigger in the gameplay mission's collision, whose script checks
+  the look changed in the shop). Mission collision without a mission scene crashes (module
+  0x18e330), and P8 has no THAW shop scripts (its cas_stores.qb is empty), so for now: the win
+  script calls GoalManager_WinGoal instead of the look check, and each goal runs it as its
+  goal_start_script (`p8goals.py zonerekey` in THAW's zone scripts: the AddGoal's fail_scene key and
+  value renamed). Both steps pass as soon as they start. To do: real shop entry.
+- Cutscene atoms (`cutscenes\HO_2.cut`, not on P8's disc): `p8goals.py cutsceneskip` keeps
+  game_progress_process_cutscene up to its PlayCutscene call and spawns
+  `game_progress_process_status { wait_time = 1 }` instead (the atom counts as done when no cutscene
+  plays; the C side: vtable 0x3763ac, start 0x2368c0, update 0x236964 checks 'cutscene').
+- The save prompt atom blocks on `ingame_save_finished`; P8's No handler (0xe345fc6b) never sends it:
+  THAW's `ingame_save_return_to_game` is back, and `p8goals.py saveprompt` spawns the progression
+  again after the prompt.
+- PPSSPP: Start New Story -> barber -> clothing -> (HO_2) -> save prompt (No) -> View Missions
+  "Learn from the Hollywood skaters.", the caveman lesson's star on the map.
