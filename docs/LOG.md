@@ -994,3 +994,5 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   entry is null in game (likely a save/memcard context P8's own in-game flow sets up and THAW's does
   not). Next: break at 0x08b38b00 unconditionally once the pause menu is up, read ra and the
   stack, and find which setup P8's tab-UI save path calls first.
+- A breakpoint condition on entry 0 (`[0x08b660d0] == 0`) does not catch it, so the slot byte is
+  not 0 when it crashes; read 0x08b660d9 first, then break on that entry.
