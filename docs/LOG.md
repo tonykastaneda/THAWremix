@@ -1024,3 +1024,10 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   pools are pushed in launch_files_menu; the fault may be inside the files menu/save itself under
   the THAW front end. Next: break at 0x08b38b00 with ra logged after Save Game is pressed (start
   the breakpoint from the pause menu) and walk the stack. (Experiment not kept.)
+- Caught with `p8trace.py --funcs 0x08b38b00 --arm-after 74000`: the crashing read comes from
+  0x15ee04 (return 0x08963084), the engine's script pool usage report ("Script pool usage",
+  "CStruct %5d of %5d (max %5d)", "Permanent Strings ..."), which the engine prints when a script
+  pool runs out. So the in-game save most likely exhausts a script pool (CStruct/CComponent) with
+  THAW's 31 Hollywood goals and their data loaded, and the report then reads the empty reserve
+  entry. Next: check P8V_NOGOALS saves in game (if it does, it is pool size); then make the save
+  path free goal data first, or load fewer goals at once.
