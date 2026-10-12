@@ -754,4 +754,20 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   GameObject props appended (`append_col_objects`, now taking the header size: 0x50 for THAW's
   files, whose grid/bounds words are kept; 0x20 for Remix). The converter's Remix-format .col.ps2
   crashes vanilla in collision code (module 0xe2f00) and is not used. `p8zone.py --col` takes the
-  props file. Loads and skates; bumping into a prop is untested.
+  props file. CORRECTION: that build does not load. The level never draws (black, no logged fault);
+  the shots were black and were wrongly counted as a pass. Not used; the build keeps THAW's own
+  collision without the props until this is understood.
+
+### THAW HUD on vanilla P8
+
+- Starting from the Remix port (thawhud.py: THAW sprites + THAW theme colours + SPECIAL layout):
+  P8 already uses THAW's HUD. panelstuff.qb has the same elements and sprite names, the DE_* theme
+  colours equal THAW's, and the score banner, special bar, SPECIAL letters and sponsor stroke are
+  THAW's art. Only the balance meter differs (P8: thin arcs and an arrowhead).
+- The HUD sprites are in `worlds\global\global.pak/.pab` (and the _f/_g/_i/_s copies), keyed by
+  bare name. P8's .img.psp is Remix's with version 4, 'seSV' in the checksum word, flags 0 and the
+  pixels NOT swizzled; `pspimg.read_psp` reads both, `make_psp(..., p8=True)` writes P8's.
+- `tools/p8hud.py` converts THAW's balancemeter, balancemeter_2, balancemeter_bg and
+  balancearrow_glow at the stock sizes and palette depth and rewrites global.pab in place.
+  PPSSPP: a manual shows THAW's black arc with arrow ends and the ball.
+- Testing lesson: always look at (or measure) screenshots; a run's shot count says nothing.

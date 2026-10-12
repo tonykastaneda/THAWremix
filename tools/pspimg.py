@@ -21,13 +21,15 @@ sys.path.insert(0, __file__.rsplit('\\', 1)[0].rsplit('/', 1)[0])
 
 
 def read_psp(d):
+    """Remix's .img.psp, or Project 8's (version 4, 'seSV', pixels not swizzled)."""
     ver, cks, lw, lh, fmt, z, z2, x10, w, h = struct.unpack_from('<6I4H', d, 0)
     W, H = 1 << lw, 1 << lh
     npal = 256 if fmt == 0x13 else 16
     pal = np.frombuffer(d, np.uint8, npal * 4, 0x20).reshape(npal, 4)
     p = 0x20 + npal * 4
     rb = W // 2 if npal == 16 else W
-    raw = unswizzle(np.frombuffer(d, np.uint8, rb * H, p), rb, H)
+    raw = np.frombuffer(d, np.uint8, rb * H, p)
+    raw = raw.reshape(H, rb) if ver == 4 and cks == P8_MAGIC else unswizzle(raw, rb, H)
     if npal == 16:
         idx = np.stack([raw & 15, raw >> 4], -1).reshape(H, W)
     else:
@@ -58,8 +60,12 @@ def read_wpc(d):
     return img[::-1], (w, h)
 
 
-def make_psp(rgba, used, cks, npal=16):
-    """rgba (H, W, 4) with power-of-two sides; used = (w, h) drawn part."""
+P8_MAGIC = struct.unpack('<I', b'seSV')[0]
+
+
+def make_psp(rgba, used, cks, npal=16, p8=False):
+    """rgba (H, W, 4) with power-of-two sides; used = (w, h) drawn part. p8: Project 8's variant,
+    version 4 with 'seSV' in the checksum word, flags 0 and the pixels not swizzled."""
     H, W = rgba.shape[:2]
     im = Image.fromarray(rgba, 'RGBA')
     q = im.quantize(colors=npal, method=Image.Quantize.FASTOCTREE, dither=Image.Dither.NONE)
@@ -70,9 +76,10 @@ def make_psp(rgba, used, cks, npal=16):
         pix = (idx[:, 0::2] & 15) | (idx[:, 1::2] << 4)
     else:
         pix = idx
-    pix = swizzle(np.ascontiguousarray(pix))
+    pix = np.ascontiguousarray(pix).tobytes() if p8 else swizzle(np.ascontiguousarray(pix))
     fmt = 0x13 if npal == 256 else 0x14
-    head = struct.pack('<6I4H', 2, cks, W.bit_length() - 1, H.bit_length() - 1, fmt, 0, 0, 0x10, *used)
+    head = struct.pack('<6I4H', 4 if p8 else 2, P8_MAGIC if p8 else cks, W.bit_length() - 1, H.bit_length() - 1, fmt,
+                       0, 0, 0 if p8 else 0x10, *used)
     return head + pal.tobytes() + pix
 
 
