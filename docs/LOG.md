@@ -1015,3 +1015,8 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   in-game save path (launch_ingame_menu_save_game_sequence / launch_pause_menu_save_game_sequence)
   call UnloadAnimsAndCreateMemCardPools before saving, as P8's own path must; check where P8's
   tab-UI save calls it.
+- Correction: the pause save path (launch_pause_menu_save_game_sequence) does create the pools, in
+  launch_files_menu (UnloadAnimsAndCreateMemCardPools). But `check_card FileType = OptionsAndPros
+  Save` runs before it, so the crash may come from check_card in game (in the front end it works).
+  Next: break on the CFunc of check_card's card query, or call UnloadAnimsAndCreateMemCardPools
+  before check_card and test.
