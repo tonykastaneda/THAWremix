@@ -221,6 +221,13 @@ def start(game):
     si.wShowWindow = 4  # SW_SHOWNOACTIVATE; on the hidden desktop it is never drawn on the user's screen
     pi = PI()
     log = os.path.join(os.path.dirname(EXE), 'ppsspp.log')
+    for _ in range(20):  # PPSSPP appends; one log per boot (it reached 43 GB once)
+        try:
+            if os.path.exists(log):
+                os.replace(log, log[:-4] + '.prev.log')
+            break
+        except PermissionError:  # a just-killed emulator can hold it for a moment
+            time.sleep(0.5)
     cmd = ctypes.create_unicode_buffer(f'"{EXE}" "{game}" --log="{log}"')
     if not k.CreateProcessW(None, cmd, None, None, False, NO_WINDOW, None, os.path.dirname(EXE),
                             ctypes.byref(si), ctypes.byref(pi)):
