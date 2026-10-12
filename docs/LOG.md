@@ -1120,3 +1120,10 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
 - `P8V_BIG=1` build (MEMSIZE + heaps 4x) with every non-pigeon Hollywood ped on, as PSP-2000: loads,
   no faults; COIM 1,548,288 used of 2,609,152, PedParts 401,424 used of 1,605,888, AnimHeap 148 KB used
   of 512 KB, TopDown 30,978,240 free. More peds on screen than the PSP-1000 run.
+- ISOs for a real PSP-3000 (ARK-4): `mkumd.py` compacted P8's datap.wad with byte offsets, but P8's
+  .hed counts 2048-byte sectors (as `hed.py --sectors`), so the game read far past the disc ("Could
+  not read 192 blocks, at block offset 99656400", BREAK at boot). `mkumd.py --compact-wad ...
+  --sectors` fixes it. work/iso/THAW P8 normal.iso (default build, PSP-1000 run: Hollywood, story)
+  and work/iso/THAW P8 big test.iso (`P8V_BIG=1`, every non-pigeon ped on; PSP-2000 run: TopDown
+  53,669,888, same heaps as the tree). The big build run as a PSP-1000 hangs while loading (TopDown
+  3 KB free), so on hardware: reaching Hollywood = the extra memory was granted.

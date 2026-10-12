@@ -1,6 +1,6 @@
 """Build a PSP UMD-style ISO from an unpacked game tree.
 
-  mkumd.py <game dir> <out.iso> [--like <original.iso>] [--compact-wad <PSP_GAME/USRDIR/datap>]
+  mkumd.py <game dir> <out.iso> [--like <original.iso>] [--compact-wad <PSP_GAME/USRDIR/datap> [--sectors]]
       [--file <iso path>=<source> ...]
 
 The layout follows the shipped UMD images: ISO9660 level 1 with plain names (no ;1 version), system
@@ -11,7 +11,8 @@ from the tree are dropped, new ones go at the end).
 --compact-wad repacks a Neversoft .hed/.wad pair first (into a temp copy, the tree is not
 touched): tools/hed.py's replace appends files that outgrow their slot, so a patched .wad carries
 every older copy. Each distinct file is written once, 2048-aligned, in index order, and only the
-offsets in the index change.
+offsets in the index change. --sectors: the index counts 2048-byte sectors, not bytes (Project 8,
+as hed.py --sectors); THUG2 Remix's counts bytes.
 """
 import os
 import struct
@@ -30,7 +31,7 @@ def both32(v):
     return struct.pack('<I', v) + struct.pack('>I', v)
 
 
-def compact_wad(hed_path, wad_path, out_dir):
+def compact_wad(hed_path, wad_path, out_dir, sectors=False):
     hed = bytearray(open(hed_path, 'rb').read())
     entries, p = [], 0
     while p + 8 <= len(hed):
@@ -48,13 +49,13 @@ def compact_wad(hed_path, wad_path, out_dir):
         pos = 0
         for at, off, size in entries:
             if (off, size) not in new_off:
-                src.seek(off)
+                src.seek(off * SECTOR if sectors else off)
                 data = src.read(size)
                 assert len(data) == size, (off, size)
                 new_off[(off, size)] = pos
                 dst.write(data + bytes(-size % SECTOR))
                 pos += size + (-size % SECTOR)
-            struct.pack_into('<I', hed, at, new_off[(off, size)])
+            struct.pack_into('<I', hed, at, new_off[(off, size)] // SECTOR if sectors else new_off[(off, size)])
         total = pos
     out_hed = os.path.join(out_dir, os.path.basename(hed_path))
     open(out_hed, 'wb').write(hed)
@@ -298,6 +299,9 @@ def main():
         i = args.index('--like')
         like = args[i + 1]
         del args[i:i + 2]
+    sectors = '--sectors' in args
+    if sectors:
+        args.remove('--sectors')
     if '--compact-wad' in args:
         i = args.index('--compact-wad')
         compact = args[i + 1]
@@ -315,7 +319,7 @@ def main():
         key = '/' + compact.replace('\\', '/')
         # (a --file override of the pair is what gets packed)
         h, w = compact_wad(overrides.get(key + '.hed', os.path.join(game, compact + '.hed')),
-                           overrides.get(key + '.wad', os.path.join(game, compact + '.wad')), tmp)
+                           overrides.get(key + '.wad', os.path.join(game, compact + '.wad')), tmp, sectors)
         overrides['/' + compact.replace('\\', '/') + '.hed'] = h
         overrides['/' + compact.replace('\\', '/') + '.wad'] = w
     try:
