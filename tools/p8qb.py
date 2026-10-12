@@ -4,6 +4,9 @@
   p8qb.py setfield <qb.pak.psp> <qb.pab.psp> <file> <struct> <field> <int, key, or name:<new field name>>
   p8qb.py swapscript <qb.pak.psp> <qb.pab.psp> <file> <script> <donor .qb>   (also rewrites the .pak)
   p8qb.py extract <qb.pak.psp> <qb.pab.psp> <file> <out .qb>
+  p8qb.py rekey <qb.pak.psp> <qb.pab.psp> <file> <script> <old> <new>   (packed or not; stored unpacked)
+  p8qb.py setglobal <qb.pak.psp> <qb.pab.psp> <file> <name> <int or key>
+  p8qb.py copyfield <qb.pak.psp> <qb.pab.psp> <file> <dst struct> <dst field> <src struct> <src field>
   p8qb.py setdata <qb.pak.psp> <qb.pab.psp> <file> <old>=<new> [int:<old>=<new>] [str:<Old>=<New> ...]
 
 setkey changes one checksum inside one script of a script file (<file> matches the end of its
@@ -223,7 +226,88 @@ def setfield(pakp, pabp, fname, struct_name, field, value):
     print(f'{e["name"]} {struct_name}.{field}: {old:#x} -> {new & 0xFFFFFFFF:#x}')
 
 
+def copyfield(pakp, pabp, fname, dst_struct, dst_field, src_struct, src_field):
+    """Turns one field of a struct into a copy of another struct's field (same file): its type
+    word, name and value (a pointer value keeps pointing at the source's data); the link to the
+    next field stays. A way to give a struct a field it lacks, at the cost of one it can spare."""
+    sys.path.insert(0, os.path.dirname(__file__))
+    from p8zone import top_items
+    p, b = open(pakp, 'rb').read(), bytearray(open(pabp, 'rb').read())
+    ents, _ = pak.read_entries(p)
+    e = next(e for e in ents if e['name'].lower().endswith(fname.lower()))
+    start = e['offset'] - len(p)
+    d = bytearray(b[start:start + e['size']])
+    u = lambda o: struct.unpack_from('<I', d, o)[0]  # noqa: E731
+    items = top_items(bytes(d))
+
+    def field(sname, fname_):
+        f, k = u(items[key(sname)][1] + 4), key(fname_)
+        while f and u(f + 4) != k:
+            f = u(f + 12)
+        if not f:
+            raise SystemExit(f'{fname_} not in {sname}')
+        return f
+    df, sf = field(dst_struct, dst_field), field(src_struct, src_field)
+    d[df:df + 12] = d[sf:sf + 12]
+    b[start:start + e['size']] = d
+    open(pabp, 'wb').write(b)
+    print(f'{e["name"]} {dst_struct}.{dst_field} -> copy of {src_struct}.{src_field}')
+
+
+def rekey(pakp, pabp, fname, script, old, new):
+    """Every occurrence of one checksum in one script swapped for another, packed or not: the body
+    is unpacked, edited, and stored unpacked (swap_script relocates the rest of the file, which then
+    moves to the end of the .pab, its pack entry repointed)."""
+    p, b = bytearray(open(pakp, 'rb').read()), bytearray(open(pabp, 'rb').read())
+    ents, _ = pak.read_entries(bytes(p))
+    e = next(e for e in ents if e['name'].lower().endswith(fname.lower()))
+    start = e['offset'] - len(p)
+    d = bytes(b[start:start + e['size']])
+    sk = key(script)
+    _, items = pointer_sites(d)
+    _, _, _, v = next(i for i in items if i[2] == sk and i[1] == 7)
+    usz, csz = struct.unpack_from('<2I', d, v + 4)
+    code = body(d, v + 12, usz, csz)
+    o, n = struct.pack('<I', key(old)), struct.pack('<I', key(new))
+    count = code.count(o)
+    if not count:
+        raise SystemExit(f'{old} not in {script}')
+    code = code.replace(o, n)
+    new_d = swap_script(d, sk, d[v:v + 4] + struct.pack('<2I', len(code), len(code)) + code)
+    b += bytes(-len(b) % 16)
+    pos = len(p) + len(b)
+    b += new_d
+    struct.pack_into('<II', p, e['entry_pos'] + 4, pos - e['entry_pos'], len(new_d))
+    open(pakp, 'wb').write(p)
+    open(pabp, 'wb').write(b)
+    print(f'{e["name"]} {script}: {old} -> {new} ({count}), stored unpacked, file moved to the end of the pab')
+
+
+def setglobal(pakp, pabp, fname, name, value):
+    """A top-level integer (or checksum) value, rewritten in its item header."""
+    p, b = open(pakp, 'rb').read(), bytearray(open(pabp, 'rb').read())
+    ents, _ = pak.read_entries(p)
+    e = next(e for e in ents if e['name'].lower().endswith(fname.lower()))
+    start = e['offset'] - len(p)
+    d = b[start:start + e['size']]
+    k = key(name)
+    at, t, _, _ = next(i for i in pointer_sites(bytes(d))[1] if i[2] == k)
+    if t not in (1, 13):
+        raise SystemExit(f'{name}: item type {t}, not an integer or checksum')
+    old = struct.unpack_from('<I', d, at + 12)[0]
+    new = int(value) if value.lstrip('-').isdigit() else key(value)
+    struct.pack_into('<I', b, start + at + 12, new & 0xFFFFFFFF)
+    open(pabp, 'wb').write(b)
+    print(f'{e["name"]} {name}: {old:#x} -> {new & 0xFFFFFFFF:#x}')
+
+
 def main():
+    if sys.argv[1] == 'rekey':
+        return rekey(*sys.argv[2:8])
+    if sys.argv[1] == 'setglobal':
+        return setglobal(*sys.argv[2:7])
+    if sys.argv[1] == 'copyfield':
+        return copyfield(*sys.argv[2:9])
     if sys.argv[1] == 'extract':
         pakp, pabp, fname, out = sys.argv[2:6]
         p, b = open(pakp, 'rb').read(), open(pabp, 'rb').read()

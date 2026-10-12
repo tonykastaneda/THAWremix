@@ -791,3 +791,28 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
 - `pspimg.read_psp` reads P8's format 0 (32-bit RGBA, stored at the used size).
 - Open: the bar and tab strip keep P8's red/blue; THAW's label menu layout itself needs a script
   compiler for P8's (THAW's) bytecode, which does not exist yet (Remix's qbc writes THUG2's).
+
+### THAW front end on vanilla P8: label menus, THAW's main menu items, story start
+
+- The global `0x44689337` in `scripts\game\menu\gamemenu_helpers.qb` (1 in the shipped game) turns
+  on P8's PSP UI (tab bar, P8 pause). At 0 the game runs the THAW-style label menus:
+  `create_main_menu`'s label path and THAW's `create_pause_menu`. `change_gamemode_career` and
+  `change_gamemode_classic` set it back to 1, so they now set a dummy (`p8qb rekey`).
+- `p8qb.py` gained `setglobal`, `rekey` (swap one checksum in one script; the body is stored
+  unpacked and the file moves to the end of the .pab) and `copyfield`. `qb.py` reads empty arrays.
+- Main menu items: THAW PS2's `create_base_main_menu` replaces P8's in the zone's
+  z_mainmenu_scripts (same QB format; `p8menubg.py --scripts`). STORY MODE, CLASSIC MODE,
+  CREATE-A-MODES, 2 PLAYER, HIGH SCORE / FREE SKATE, OPTIONS; their sub menus (story options,
+  difficulty, classic options, create-a-modes, game options, skater select, initials) work.
+- Backdrop: `main_menu_camera_control` (P8 kept THAW's) flies a camera along the 3D alley per
+  screen. With one card, every view but cam_main/skater/cas/taunt/cag is pinned to cam_main's
+  Pos/Quat, and `z_mainmenu_setup` sets `main_menu_very_first = 0` so the first menu uses cam_main
+  too (not `spin_menu_camera_init`). The card is resized to what cam_main sees
+  (`scale_card(0.9785, 1.1367, (263.3, -288.1))`) and the render warped onto it with corners from
+  `work/p8v/calib.py` (stripe screenshots, perspective fit to 529 points, mean error 0.20 texels).
+  Every menu screen shows the alley full-screen.
+- Start New Story: THAW's `story_options_change_level` records `load_z_ho` and
+  `Zone_LoadLastPlayed` loads `load_Z_storyselect` on the first run; P8 has neither (crash). Both
+  are rekeyed to the Houses slot's load script (0x16a10a9a). A new career now plays P8's intro
+  cutscene, loads Hollywood, and Start opens THAW's PAUSED menu.
+- Build: `P8V_THAWUI=1 python work/p8v/build.py`.

@@ -8,3 +8,6 @@ work/
 *.gzf
 *.rep/
 __pycache__/
+
+.claude/settings.local.json
+.claude/keep_working.py

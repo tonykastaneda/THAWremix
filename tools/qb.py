@@ -100,7 +100,7 @@ class QB:
     def array(self, o):
         et = self.d[o + 2]
         n = self.u32(o + 4)
-        self.touch(o + 12 if n else o + 8)
+        self.touch(o + 12)  # an empty array still has its (null) pointer word
         if n == 0:
             return []
         base = o + 8 if n == 1 else self.u32(o + 8)
