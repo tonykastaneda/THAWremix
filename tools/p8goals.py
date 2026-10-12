@@ -140,6 +140,59 @@ def spawn_progress(code):
                         bytes([0x04, NL, 0x24]))
 
 
+def insert_code(code, at, new):
+    """Bytecode with new inserted at offset at: every if (0x47), else (0x48) or case jump (0x49) that
+    starts before at and jumps past it grows by len(new) (their u16 is the distance to the target).
+    new is padded to a multiple of 4 with newlines: inline structs (0x4A) further on are aligned."""
+    import qb2
+    new = new + bytes([NL]) * (-len(new) % 4)
+    code = bytearray(code)
+    for o, t, pl in qb2.tokens(bytes(code)):
+        if t in (IF, 0x48, 0x49) and o < at < o + struct.unpack('<H', pl)[0] + 1:
+            struct.pack_into('<H', code, o + 1, struct.unpack('<H', pl)[0] + len(new))
+    return bytes(code[:at]) + new + bytes(code[at:])
+
+
+def call_line(func, **params):
+    """<func> name = <int> ... newline"""
+    out = name(func)
+    for k, v in params.items():
+        out += name(k) + bytes([EQ, 0x17]) + struct.pack('<i', v)
+    return out + bytes([NL])
+
+
+COIM_SIZE = 652288  # Hollywood's COIM heap, measured at the pause menu (all of it free there)
+
+
+def coim_around_save(pakp, pabp):
+    """Saving pushes temporary script pools (20000 CComponent, 9000 CStruct, 3000 CVector, ~440 KB)
+    onto the main heap, which has 422 KB free with THAW's Hollywood and its goals loaded: the last
+    pool comes back null and the engine's pool report crashes reading it. The COIM heap (652 KB,
+    empty at the pause menu) goes for the save: UnloadAnimsAndCreateMemCardPools calls
+    ResizeCOIMHeap newsize = 0 before its in-game PushTemporaryMemCardPools, and
+    RemoveMemCardPoolsAndLoadAnims makes it again after its in-game PopTemporaryMemCardPools."""
+    import qb2
+
+    def before_first(func, line):
+        def edit(code):
+            at = next(o for o, t, pl in qb2.tokens(code) if t == NAME and pl == struct.pack('<I', pak.qbkey(func)))
+            return insert_code(code, at, line)
+        return edit
+
+    def after_first(func, line):
+        def edit(code):
+            toks = list(qb2.tokens(code))
+            i = next(i for i, (o, t, pl) in enumerate(toks) if t == NAME and pl == struct.pack('<I', pak.qbkey(func)))
+            at = next(o for o, t, pl in toks[i + 1:] if t == NL) + 1
+            return insert_code(code, at, line)
+        return edit
+    edit_script(pakp, pabp, 'menu' + chr(92) + 'memcard.qb.psp', 'UnloadAnimsAndCreateMemCardPools',
+                before_first('PushTemporaryMemCardPools', call_line('ResizeCOIMHeap', newsize=0)))
+    edit_script(pakp, pabp, 'menu' + chr(92) + 'memcard.qb.psp', 'RemoveMemCardPoolsAndLoadAnims',
+                after_first('PopTemporaryMemCardPools', call_line('ResizeCOIMHeap', newsize=COIM_SIZE)))
+    print(f'memcard pools: COIM heap dropped for the save, made again at {COIM_SIZE} bytes after')
+
+
 def zone_rekey(pak_path, script, old, new):
     """One checksum swapped for another in one script of a zone pak's <zone>_scripts.qb (in place)."""
     ents, blob = p8zone.load_pak(pak_path)
@@ -231,6 +284,8 @@ def main():
             return code[:at] + n_ + code[at + 4:]
         edit_script(pk, pb, f, sc, nth_only)
         print(f'{f} {sc}: occurrence {nth} of {old} -> {new}')
+    elif sys.argv[1] == 'savecoim':
+        coim_around_save(*sys.argv[2:4])
     elif sys.argv[1] == 'zonerekey':  # <zone .pak.psp> <script> <old> <new>
         zone_rekey(*sys.argv[2:6])
     elif sys.argv[1] == 'missions':

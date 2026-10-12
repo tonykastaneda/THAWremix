@@ -1044,3 +1044,28 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   the submenus that share it). After: the ratios are ~1.0.
 - The legend's lowercase "Accept" (`\m0 Accept` in mainmenu_strings.qb) is "ACCEPT", as THAW's own
   submenus have it (`p8qb setstr`).
+
+### In-game saving fixed
+
+- Cause: saving pushes temporary script pools (20000 CComponent, 9000 CStruct, 3000 CVector, ~440
+  KB; PushTemporaryMemCardPools -> FUN_001c37a0) onto the main heap. Heaps read at the pause menu
+  (manager at 0x08b64358, heap array count at +0xC0; per heap name +0x30, region +0x20; free as
+  DisplayFreeMem): TopDown/BottomUp share one 20 MB region with 422 KB free. A pool came back null
+  and the engine's pool report (0x15ee04) crashed reading it. On P8's own Houses the same in-game
+  save worked; Hollywood's zone pak took 470 KB more (its zone_sizes budget = the pak).
+- Fixes:
+  - `p8zone --strip` for the Hollywood zone: Houses' own props (models, anims, particles: 52 entries,
+    273 KB) leave the pak (2,018,416 -> 1,744,976 bytes). Free Skate saves after this alone.
+  - Story (THAW goals loaded) was still short (the CVector pool failed). The COIM heap (652,288
+    bytes) is empty at the pause menu: `p8goals.py savecoim` inserts `ResizeCOIMHeap newsize = 0`
+    before the in-game PushTemporaryMemCardPools (UnloadAnimsAndCreateMemCardPools) and
+    `ResizeCOIMHeap newsize = 652288` after the in-game PopTemporaryMemCardPools
+    (RemoveMemCardPoolsAndLoadAnims). `insert_code` inserts bytecode, growing the if/else/case
+    jumps that span the insertion, padded to 4 for the inline structs after it.
+  - Moving the pools to the TopDownHeap instead (one load offset in FUN_001c37a0) did not help: not
+    kept.
+  - After an in-game save, P8's back_to_pause_menu opened P8's options menu (0x8075d1aa): it calls
+    THAW's ingame_save_return_to_game now (back to the game, ingame_save_finished for the prompt).
+- PPSSPP: story save prompt Yes -> save list -> Save completed -> back to skating, the story goes on
+  ("Learn from the Hollywood skaters"); pause menu Save Game in the story, the same; Free Skate save;
+  Continue Story Mode loads the save into Hollywood with its progress ($120, goal stars, objective).
