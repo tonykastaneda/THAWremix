@@ -68,7 +68,7 @@ def main():
         for n in ['z_ho_goal_' + t] + [f'z_ho_goal_{t}{i}' for i in range(120)]:
             qb.NAMES.setdefault(pak.qbkey(n), n)
     image = open(IMAGE, 'rb').read()
-    bps = {cfunc(n, image): n for n in funcs}
+    bps = {(int(n, 16) if n.startswith('0x') else cfunc(n, image)): n for n in funcs}  # names or run-time addresses
 
     def emit(line):
         print(line, flush=True)
