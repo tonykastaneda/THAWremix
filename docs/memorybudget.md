@@ -32,6 +32,40 @@ GameObjects, store paks, the Project Mod physics/camera). Targets: PSP-3000 and 
   work/ppsspp_test/memstick/PSP/SYSTEM/ppsspp.ini): 32 MB. Every number above was measured on the
   smallest model. P8's executable has a `GotExtraMemory` script CFunc, so it may use the extra
   32 MB of the PSP-2000/3000 (and Vita): unverified.
+- Scope: every P8 map and all of P8's story are replaced by THAW's. Each THAW area takes a P8 zone
+  slot (which slot does not change its memory: the heaps are the same for every level; the only
+  per-slot number is its `zone_sizes_psp` entry). P8's own resident content (its goal scripts in
+  qb.pab, career peds, global paks used only by its levels) can go to make room.
+
+## Size limits from P8's own levels
+
+P8's largest levels (stock v1.00 archive, bytes) fit its heaps, so they set the limits each
+converted THAW area should stay under:
+
+| zone | zone pak | .psp_level | textures | vertices | material lists |
+|---|---|---|---|---|---|
+| z_houses | 1,545,920 | **2,851,544** | **1,005,616** | 1,712,776 | 21,064 |
+| z_center | 2,116,336 | 2,739,222 | 791,008 | **1,844,764** | 15,404 |
+| z_hi | **2,211,008** | 2,632,612 | 902,624 | 1,556,844 | 34,732 |
+| z_inschool | 1,843,360 | 2,523,802 | 943,152 | 1,447,452 | 24,904 |
+| z_shops | 1,503,488 | 2,502,624 | 961,264 | 1,396,864 | 27,640 |
+| z_alc | 1,989,616 | 2,479,288 | 791,648 | 1,573,744 | 18,136 |
+| **THAW Hollywood (ours)** | 1,744,976 | **3,890,688** | **1,436,416** | **2,290,068** | **92,952** |
+
+- **Limits per area: zone pak <= 2.2 MB** (z_hi's pak equals the 2,211,008 total in
+  `zone_sizes_psp`), **.psp_level <= 2.85 MB, textures <= 1.0 MB, vertices <= 1.85 MB.**
+- Hollywood's pak is within the limit (about 470 KB to spare). Its .psp_level is about 1 MB over,
+  split roughly evenly:
+  - textures +430 KB: about 516 textures, all 16-colour 64x64 with 4 mip levels (about 2.8 KB each;
+    `thaw2psp.py --tex 64`);
+  - vertices +450 KB: 190,839 vertices (12 bytes each). `thaw2psp.py` tessellates triangles longer
+    than `--tess 400` inches near the playable area and cuts strips at 31 vertices, both of which
+    add vertices;
+  - material lists: 23,238 words against P8's 4,000-9,000 (one list per material). Small in bytes
+    (+60 KB), but it also means many more GE state changes per frame.
+- These are file sizes, not heap use; which heap holds the scene is still open (step 3).
+- The THUG2 Remix build (`work/iso/THX Hollywood.iso`) used the same converter: its Hollywood
+  `tr.psp_level` was 3.8 MB, so there is no smaller version of Hollywood to reuse.
 
 ## Tools
 
@@ -74,7 +108,12 @@ Same build, same button sequence, `p8heaps.py` at each point, saved as a table i
   what removing them would save (they shift node indices: check what refers to them first).
 - Collision: compare THAW's Hollywood .col layout with P8's levels (sector count, face data);
   whether anything can go (e.g. net-only or hidden sectors).
-- The .psp_level (3.9 MB): which heap holds the scene, and whether texture sizes can drop.
+- The .psp_level (3.9 MB): which heap holds the scene. Bring it under the limits above in
+  `thaw2psp.py`: textures (32x32 for small or distant surfaces, merge duplicate and near-duplicate
+  textures, fewer mip levels), vertices (a longer `--tess`, fewer split strips, drop geometry never
+  seen from the playable area), fewer materials. Check each change on screen in the test copy.
+- P8's own resident content that THAW replaces: list what is in qb.pab, the global paks and
+  PedParts for P8's career and levels only, and what removing it frees.
 - COIM heap: what uses it in P8 (peds/objects streaming?), whether Hollywood ever fills it during
   play (watch it with p8heaps over a few minutes of skating and goals). If never, shrink it
   permanently at level start (`ResizeCOIMHeap newsize = <n>`), not only during saves.
