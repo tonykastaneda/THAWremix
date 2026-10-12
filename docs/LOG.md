@@ -989,3 +989,8 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   the fault is further on (P8's memcard UI under the THAW front end?). Saving from the main menu's
   Options works. Answer No at the prompt for now. Next: trace with tools/p8trace.py (start it at
   the pause menu so the breakpoints do not slow the story start).
+- The crash function (module 0x334b00) takes no argument: it returns field +0x10 of the entry
+  `DAT_003620d0[byte DAT_003620d9]`, a global table indexed by a current-device/slot byte; that
+  entry is null in game (likely a save/memcard context P8's own in-game flow sets up and THAW's does
+  not). Next: break at 0x08b38b00 unconditionally once the pause menu is up, read ra and the
+  stack, and find which setup P8's tab-UI save path calls first.
