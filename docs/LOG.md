@@ -1031,3 +1031,6 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   THAW's 31 Hollywood goals and their data loaded, and the report then reads the empty reserve
   entry. Next: check P8V_NOGOALS saves in game (if it does, it is pool size); then make the save
   path free goal data first, or load fewer goals at once.
+- Tried the P8V_NOGOALS in-game save check: inconclusive, the test copy stopped answering input
+  (ppsspp_ws TimeoutError on input.buttons.send) during the run, no screenshots. Repeat it.
+  The default build was rebuilt afterwards.
