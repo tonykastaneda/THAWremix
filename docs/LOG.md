@@ -836,8 +836,10 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   16 colours) becomes `ho_level_map`, mouse_cursor (32x16, 16 colours, debugger only) becomes
   `Bike_arrow` (THAW's 16x32 arrow turned a quarter counter-clockwise). Keys renamed in the pak
   header, data replaced in the .pab, sizes unchanged. The script's `rot_angle = heading + 90`
-  becomes `heading + 180` (`p8qb rekey ... 0x5a 0xb4`; a negative angle turns counter-clockwise,
-  as the label menus' title_rotation -6 shows), so the drawn arrow equals THAW's.
+  becomes `heading + 0` (`p8qb rekey ... 0x5a 0x0`): a positive rot_angle turns a sprite
+  counter-clockwise (at the spawn, + 90 drew the turned arrow pointing left, + 180 down; the label
+  menus' title_rotation is no guide), so the drawn arrow equals THAW's. With + 0 the spawn arrow
+  points up the map, the way the skater moved in a run that got free of the spawn ledge.
 - `p8qb rekey`/`copyfield` move the edited file to the end of qb.pab and leave the old copy; with
   four moved files the .pab was 165 KB over stock. `p8qb compact` now rewrites the .pab with live
   files only (3,094,912 bytes vs 3,094,016 stock).
