@@ -1,7 +1,9 @@
 """In-place edits to Project 8 PSP's script pack (pak\\qb.pak.psp + qb.pab.psp).
 
   p8qb.py setkey <qb.pak.psp> <qb.pab.psp> <file> <script> <old> <new>
-  p8qb.py setfield <qb.pak.psp> <qb.pab.psp> <file> <struct> <field> <int or key>
+  p8qb.py setfield <qb.pak.psp> <qb.pab.psp> <file> <struct> <field> <int, key, or name:<new field name>>
+  p8qb.py swapscript <qb.pak.psp> <qb.pab.psp> <file> <script> <donor .qb>   (also rewrites the .pak)
+  p8qb.py extract <qb.pak.psp> <qb.pab.psp> <file> <out .qb>
   p8qb.py setdata <qb.pak.psp> <qb.pab.psp> <file> <old>=<new> [int:<old>=<new>] [str:<Old>=<New> ...]
 
 setkey changes one checksum inside one script of a script file (<file> matches the end of its
@@ -81,6 +83,117 @@ def setdata(pakp, pabp, fname, *pairs):
     open(pabp, 'wb').write(b)
 
 
+POINTER_TYPES = {3, 4, 5, 6, 7, 10, 12}  # string, local string, vec2, vec3, script, struct, array
+
+
+def pointer_sites(d):
+    """Offsets of every word in a QB file that holds a file offset: item values, struct first-field
+    and field value / next links, array bases and pointer elements. Items follow each other from
+    0x1C ([?][?][type][?][name][file key][value][next = 0], 0x14 bytes, data after); a script value
+    points at [?][unpacked size][packed size][code]."""
+    u = lambda o: struct.unpack_from('<I', d, o)[0]  # noqa: E731
+    sites, seen = [], set()
+
+    def val(t, at):
+        if t in POINTER_TYPES:
+            sites.append(at)
+            o = u(at)
+            if t == 10:
+                walk_struct(o)
+            elif t == 12:
+                walk_array(o)
+
+    def walk_struct(o):
+        if o in seen:
+            return
+        seen.add(o)
+        sites.append(o + 4)
+        p = u(o + 4)
+        while p:
+            val(d[p + 1] >> 1, p + 8)
+            sites.append(p + 12)
+            p = u(p + 12)
+
+    def walk_array(o):
+        if o in seen:
+            return
+        seen.add(o)
+        et, n = d[o + 2], u(o + 4)
+        if n == 0:
+            return
+        if n == 1:
+            val(et, o + 8)
+        else:
+            sites.append(o + 8)
+            base = u(o + 8)
+            for i in range(n):
+                val(et, base + 4 * i)
+
+    q = qb.QB(d)
+    p, items = 0x1C, []
+    while p + 0x14 <= u(4):
+        t = d[p + 2]
+        q.hi = p + 0x14
+        v = u(p + 12)
+        if t == 7:
+            q.touch(v + 12 + u(v + 8))
+        else:
+            q.value(t, v)
+        items.append((p, t, u(p + 4), v))
+        val(t, p + 12)
+        p = (q.hi + 3) & ~3
+    return sorted(set(sites)), items
+
+
+def swap_script(d, script_key, block):
+    """d with one script's [?][usz][csz][code] block replaced by block (from another build of the
+    file), every later offset moved by the size change."""
+    d = bytearray(d)
+    sites, items = pointer_sites(bytes(d))
+    p, t, k, v = next(i for i in items if i[2] == script_key and i[1] == 7)
+    old_len = (12 + struct.unpack_from('<I', d, v + 8)[0] + 3) & ~3
+    new = block + bytes(-len(block) % 4)
+    delta, end = len(new) - old_len, v + old_len
+    for s in sites:
+        x = struct.unpack_from('<I', d, s)[0]
+        if x >= end:
+            struct.pack_into('<I', d, s, x + delta)
+    out = d[:v] + new + d[end:]
+    struct.pack_into('<I', out, 4, len(out))
+    return bytes(out)
+
+
+def script_block(d, script_key):
+    _, items = pointer_sites(d)
+    p, t, k, v = next(i for i in items if i[2] == script_key and i[1] == 7)
+    return d[v:v + 12 + struct.unpack_from('<I', d, v + 8)[0]]
+
+
+def swapscript(pakp, pabp, fname, script, donor):
+    """Replaces one script of a pack file with the same-named script from donor (a loose .qb file),
+    checks every other item still reads the same, and moves the file to the end of the .pab (its
+    pack entry repointed; nothing else moves)."""
+    p, b = bytearray(open(pakp, 'rb').read()), bytearray(open(pabp, 'rb').read())
+    ents, _ = pak.read_entries(bytes(p))
+    e = next(e for e in ents if e['name'].lower().endswith(fname.lower()))
+    start = e['offset'] - len(p)
+    d = bytes(b[start:start + e['size']])
+    sk = key(script)
+    new = swap_script(d, sk, script_block(open(donor, 'rb').read(), sk))
+    a = [x for x in qb.QB(d).items() if pak.qbkey(str(x[0])) != sk and str(x[0]) != '0x%08x' % sk]
+    c = [x for x in qb.QB(new).items() if pak.qbkey(str(x[0])) != sk and str(x[0]) != '0x%08x' % sk]
+    norm = lambda items: [(k, (v[0], v[2], v[3]) if isinstance(v, tuple) and v and v[0] == 'script' else v) for k, v in items]  # noqa: E731
+    if norm(a) != norm(c):
+        raise SystemExit('other items changed; not written')
+    b += bytes(-len(b) % 16)
+    pos = len(p) + len(b)
+    b += new
+    struct.pack_into('<II', p, e['entry_pos'] + 4, pos - e['entry_pos'], len(new))
+    open(pakp, 'wb').write(p)
+    open(pabp, 'wb').write(b)
+    print(f'{e["name"]} {script}: {len(d)} -> {len(new)} bytes, moved to the end of the pab')
+
+
 def setfield(pakp, pabp, fname, struct_name, field, value):
     """One field of one top-level struct, rewritten in place: an integer value, or a key (0x hex or a
     name) for a checksum-valued field. A struct is [?][first field]; a field is [type word][name]
@@ -99,16 +212,26 @@ def setfield(pakp, pabp, fname, struct_name, field, value):
         f = u(f + 12)
     if not f:
         raise SystemExit(f'{field} not in {struct_name}')
-    old = u(f + 8)
-    new = int(value) if value.lstrip('-').isdigit() else key(value)
-    struct.pack_into('<I', d, f + 8, new & 0xFFFFFFFF)
+    if value.startswith('name:'):  # rename the field instead (e.g. to hide it from GotParam)
+        at, new = f + 4, key(value[5:])
+    else:
+        at, new = f + 8, int(value) if value.lstrip('-').isdigit() else key(value)
+    old = u(at)
+    struct.pack_into('<I', d, at, new & 0xFFFFFFFF)
     b[start:start + e['size']] = d
     open(pabp, 'wb').write(b)
     print(f'{e["name"]} {struct_name}.{field}: {old:#x} -> {new & 0xFFFFFFFF:#x}')
 
 
 def main():
-    if sys.argv[1] == 'setfield':
+    if sys.argv[1] == 'extract':
+        pakp, pabp, fname, out = sys.argv[2:6]
+        p, b = open(pakp, 'rb').read(), open(pabp, 'rb').read()
+        e = next(e for e in pak.read_entries(p)[0] if e['name'].lower().endswith(fname.lower()))
+        open(out, 'wb').write((p + b)[e['offset']:e['offset'] + e['size']])
+    elif sys.argv[1] == 'swapscript':
+        swapscript(*sys.argv[2:7])
+    elif sys.argv[1] == 'setfield':
         setfield(*sys.argv[2:8])
     elif sys.argv[1] == 'setkey':
         setkey(*sys.argv[2:8])

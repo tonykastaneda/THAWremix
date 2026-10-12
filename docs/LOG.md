@@ -688,3 +688,28 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   Change_Sky block is gone, the scene pre-file loads and level-load movies are removed, path memory
   differs. That is probably what lets converted (Remix-format) levels load in the mod, and what
   vanilla lacks.
+
+### Hollywood loads and skates in vanilla P8 v1.00
+
+- Test harness: `work/p8v/build.py` with `P8V_AUTO=1` points startup's retail autolaunch
+  (`default_system_startup`: Load_Z_MainMenu) at the Houses loader, so the game boots through the
+  intro straight into the level; menu driving by timed button presses proved unreliable (runs that
+  "did not crash" had never left the menus, so earlier no-crash results were discarded).
+- Bisection (Houses' own pak as the template, one part swapped at a time):
+  - converted geometry loads in vanilla: Houses' pak + the mod's School .psp_level renders and skates;
+  - our .psp_level has no level objects (header nObjs 0; Houses has 28, School 45): Houses' nodes
+    against it crash (null at +0x10, module 0x7beb4), and so do Hollywood's own GameObject /
+    LevelObject / LevelLight nodes (scene setup, module 0xae674);
+  - THAW's zone scripts (z_ho_scripts) crash vanilla too: StructureContains gets a garbage struct
+    (0xbef2deeb, module 0xc70cc);
+  - the mod's whole script pack does not run on vanilla data (it loads the mod's own paks).
+- Working build: `p8zone.py ... --slot z_houses --keep-scripts --no-spawn
+  Pedestrian,Vehicle,GameObject,LevelObject,LevelLight` on Houses' pak (THAW geometry, collision,
+  nodes, gaps and peds file; Houses' zone scripts), Houses' zone_sizes entry set to the pak size.
+  Autolaunch: loads, rides, airs, ollies; no faults in strict mode. No sky yet (night backdrop).
+- Next for this base: level objects in the converter (or nodes rewired), THAW's zone scripts made
+  to run on P8 (or rewritten), the sky, then the story (Houses is where a new career starts).
+- `p8qb.py swapscript` replaces one script in a pack file with another build's, relocating every
+  later pointer (item values, struct fields and links, array bases and elements) and checking the
+  other items read the same; the file moves to the end of the .pab. The mod's whole load_level
+  breaks vanilla's front end (the menu never shows), so it is not used.

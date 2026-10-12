@@ -118,10 +118,12 @@ def top_items(data):
 
 # THAW's peds and traffic name its own models and ped profiles, which P8 lacks; spawned, a ped's
 # instance request comes back empty (a crash). Not created at start, they stay in the node array.
+# On vanilla P8 GameObject, LevelObject and LevelLight must go too (--no-spawn): the converted
+# .psp_level has no level objects (nObjs 0) for them to attach to.
 NO_SPAWN = ('Pedestrian', 'Vehicle')
 
 
-def unspawn(data, zone):
+def unspawn(data, zone, no_spawn=NO_SPAWN):
     """Turns CreatedAtStart into AbsentInNetGames (inert offline) in the node array's ped and vehicle
     structs and in the compressed shared structs that give a node those classes. A struct is
     [?][first field]; a field is [type word][name][value][next]. Fields stay linked: P8's loader
@@ -133,7 +135,7 @@ def unspawn(data, zone):
     arr = items[qbkey(f'{zone}_NodeArray')][1]
     n, base = u(arr + 4), u(arr + 8)
     cls_key, cas = qbkey('Class'), qbkey('CreatedAtStart')
-    classes = {qbkey(c) for c in NO_SPAWN}
+    classes = {qbkey(c) for c in no_spawn}
     structs = set()
     for i in range(n):
         s = u(base + 4 * i)
@@ -245,7 +247,10 @@ def main():
     ap.add_argument('--template', help="zone of slot_pak when it is not --slot (e.g. z_houses's pak for a new z_ho)")
     ap.add_argument('--strip', action='store_true', help="leave out the slot pak's own props (TEMPLATE_PROPS)")
     ap.add_argument('--no-peds', action='store_true', help="keep the slot's peds file")
+    ap.add_argument('--keep-scripts', action='store_true',
+                    help="keep the slot's zone scripts (THAW's crash vanilla P8 as they stand)")
     ap.add_argument('--spawn-peds', action='store_true', help="keep THAW's peds and vehicles CreatedAtStart")
+    ap.add_argument('--no-spawn', default=','.join(NO_SPAWN), help='node classes left uncreated (comma list)')
     a = ap.parse_args()
     zone, slot = a.zone.lower(), a.slot.lower()
     tz = (a.template or slot).lower()
@@ -273,9 +278,9 @@ def main():
             payloads[i], fixed = fix_blips(rename(thaw('.nqb', ''), renames))
             print(f'compass blips moved to P8 types: {fixed}')
             if not a.spawn_peds:
-                payloads[i], fixed = unspawn(payloads[i], slot)
-                print(f'peds and vehicles left uncreated: {fixed} CreatedAtStart flags')
-        elif k == '.sqb' and n.endswith(f'{tz}_scripts.qb.psp'):
+                payloads[i], fixed = unspawn(payloads[i], slot, a.no_spawn.split(','))
+                print(f'{a.no_spawn} left uncreated: {fixed} CreatedAtStart flags')
+        elif k == '.sqb' and n.endswith(f'{tz}_scripts.qb.psp') and not a.keep_scripts:
             payloads[i] = rename(thaw('.sqb', '_scripts'), renames)
         elif k == '.qb' and n.endswith(f'{tz}_peds.qb.psp') and not a.no_peds:
             payloads[i] = thaw('.qb', '_peds')
