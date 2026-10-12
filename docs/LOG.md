@@ -1009,3 +1009,9 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   (`Reserve CComponent` 20000, `Reserve CStruct` 9000, `Reserve CVector` 3000, via 0x32e07c / 0x32e41c
   / 0x32e1a0). Saving pushes to that reserve without it having been created. Next: find the script
   CFunc that leads to 0x1c37a0 (P8's save path calls it, THAW's does not) and call it before saving.
+- 0x1c37a0 is reached from the CFuncs `PushTemporaryMemCardPools`, `SaveToMemoryCard` and
+  `LoadFromMemoryCard`. The pools come from memcard.qb's `UnloadAnimsAndCreateMemCardPools`
+  (PushTemporaryMemCardPools; undone by `RemoveMemCardPoolsAndLoadAnims`). Likely fix: make the
+  in-game save path (launch_ingame_menu_save_game_sequence / launch_pause_menu_save_game_sequence)
+  call UnloadAnimsAndCreateMemCardPools before saving, as P8's own path must; check where P8's
+  tab-UI save calls it.
