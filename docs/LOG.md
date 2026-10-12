@@ -713,3 +713,22 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   later pointer (item values, struct fields and links, array bases and elements) and checking the
   other items read the same; the file moves to the end of the .pab. The mod's whole load_level
   breaks vanilla's front end (the menu never shows), so it is not used.
+
+### THAW Remix look on vanilla P8: screens, title, icons, intro
+
+- Vanilla's load screens are the Remix-style 480x272 RGBA8888 with a 0x20 header (4, 'seSV', 8, 8,
+  ..., 480, 272), each twice: `images\loadscrn_<name>.img.psp` and
+  `images\raw\us\loadscrn_us\loadscrn_<name>.img.psp` (localized copies under `raw\figs`). Vanilla
+  still has THAW leftovers there (`loadscrn_hollywood`, `_hollywood_2`, `generic_1..7`).
+- `p8screens.py --vanilla --logo work/THAW_American_Wasteland_Remix.png` (the THAW logo with the
+  Remix tape, made by tools/make_remix_logo.py): loadscrn_houses <- THAW hollywood, loadscrn_generic
+  <- THAW generic, the boot TGAs and loadscrn_x <- the logo on black over THAW's legal text (lifted
+  from its title screen, white text only), and the icons <- the logo on black: disc ICON0/PIC1 and
+  `images\raw\icon\icon0/icon1/pic1.png` (save data). SND0.AT3 (P8's XMB music) is kept aside.
+- Intro: THAW's atvilogo, ns_logo and g_intro replace P8's in `movies\start`; P8's Page 44 and
+  Shaba logos stay between them.
+- PPSSPP (strict): intro plays (Activision, Page 44, Shaba, Neversoft, THAW intro); autolaunch shows
+  THAW's generic load screen, then P8's own career-opening cutscene plays in Hollywood. The legal
+  screen does not show under PPSSPP for vanilla's own TGA either, so the new title is unverified;
+  the Hollywood load screen shows only when Houses loads from the menus (not yet driven).
+- `work/p8v/build.py` does all of this from pristine copies.
