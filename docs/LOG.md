@@ -962,3 +962,5 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   M_ZHOHIGHCOMBO_start_Ped_Bum01, ...) built from THAW parts. `p8goals.py missions` now maps every
   ped profile in the mission paks to Ped_HippieF01 (Mindy) or Ped_DVGuy. The goal then runs ("Land a
   2000 point combo", timer). Default build re-checked: story start to the caveman lesson, no faults.
+- Free Skate's level select lists the Houses slot as HOLLYWOOD (`p8qb setstr`: a pointed-to
+  string replaced at any length, the file relocated). Its picture is still P8's Suburbs art.

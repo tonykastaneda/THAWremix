@@ -333,6 +333,33 @@ def addfield(pakp, pabp, fname, struct_name, after, field, value):
     print(f'{e["name"]} {struct_name}: new field {field} = {value[4:]!r} after {after}')
 
 
+def setstr(pakp, pabp, fname, old, new):
+    """A string value in a file's data replaced by one of any length: the string a pointer leads to
+    (its text, NUL and padding to 4) is swapped and the rest of the file moved (resize); the file
+    goes to the end of the .pab."""
+    p, b = bytearray(open(pakp, 'rb').read()), bytearray(open(pabp, 'rb').read())
+    ents, _ = pak.read_entries(bytes(p))
+    e = next(e for e in ents if e['name'].lower().endswith(fname.lower()))
+    start = e['offset'] - len(p)
+    d = bytes(b[start:start + e['size']])
+    sites, _ = pointer_sites(d)
+    targets = {struct.unpack_from('<I', d, x)[0] for x in sites}
+    o = old.encode('latin-1') + bytes(1)
+    hits = [i for i in range(len(d)) if d.startswith(o, i) and i in targets]
+    if len(hits) != 1:
+        raise SystemExit(f'{old!r}: {len(hits)} pointed-to copies in {e["name"]}')
+    at = hits[0]
+    room = (len(o) + 3) & ~3
+    d = resize(d, at, room, new.encode('latin-1') + bytes(1))
+    b += bytes(-len(b) % 16)
+    pos = len(p) + len(b)
+    b += d
+    struct.pack_into('<II', p, e['entry_pos'] + 4, pos - e['entry_pos'], len(d))
+    open(pakp, 'wb').write(p)
+    open(pabp, 'wb').write(b)
+    print(f'{e["name"]}: {old!r} -> {new!r}')
+
+
 def rekey(pakp, pabp, fname, script, old, new):
     """Every occurrence of one checksum in one script swapped for another, packed or not: the body
     is unpacked, edited, and stored unpacked (swap_script relocates the rest of the file, which then
@@ -399,6 +426,8 @@ def compact(pakp, pabp):
 
 
 def main():
+    if sys.argv[1] == 'setstr':
+        return setstr(*sys.argv[2:7])
     if sys.argv[1] == 'addfield':
         return addfield(*sys.argv[2:9])
     if sys.argv[1] == 'compact':
