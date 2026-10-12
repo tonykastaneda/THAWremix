@@ -682,3 +682,14 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   suspect during the hunt; it turned out not to be the cause, but it is kept.
 - Strict run on the new `work/iso/THX Hollywood.iso` (L4): boot, menu, new story, Hollywood, pause
   (map, rotated title), View Goals, unpause. No halt.
+- `THAWremix/Tony Hawk Project Mod.chd` (a Project 8 PSP mod, disc ULUS-10197, "Tony Hawk's Project
+  Mod") is extracted to `work/p8mod` (`chdman extractcd`, a MODE1/2048 track, i.e. a plain ISO). Its
+  engine is THAW's generation, not Remix's:
+  - zone layout (`worlds/worldzones/z_*`, `missions/`, `pak/qb.pak` + `qb.pab`), as THAW PS2 uses;
+  - the `qb.pak` header matches THAW's, and `thawqbdump` decodes 295 of 297 of its script files
+    (5,294 scripts); 205 of THAW's 266 script files exist under the same names;
+  - the `.psp_level` is Remix's format with a 0x1C header, and `psplevel.info` parses it to the
+    exact file end;
+  - 994 of the 1,051 THAW engine function names its scripts call are named in this EBOOT; most of
+    the missing ones are park editor and keyboard functions.
+  - The mod ships 43 zones, including Remix's levels (z_ap, z_au, z_ba, ...) and z_mainmenu.
