@@ -905,3 +905,16 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   again after the prompt.
 - PPSSPP: Start New Story -> barber -> clothing -> (HO_2) -> save prompt (No) -> View Missions
   "Learn from the Hollywood skaters.", the caveman lesson's star on the map.
+
+### First THAW story goal played on P8: the caveman lesson
+
+- `P8V_TESTGOAL=<goal>` (test aid) swaps `z_ho_goal_gaps15` in chapter_info, so the story opens with
+  that goal. With `z_ho_goal_counter`: intro skipped, the goal runs with THAW's HUD (2:00 timer,
+  counter, "Switch to walk: press L R and then switch back to skating"); three cavemen (L+R, walk,
+  L+R) win it and the child stage `Z_HO_Goal_Gaps40` starts at once at the red ropes ("Grind the red
+  ropes", new timer), the skater moved to its restart node. THAW's goal templates, HUD and staging
+  run unchanged on P8.
+- Pause menu crash in the goals build: THAW's create_pause_menu calls P8's SET/GOTO RESTART adder
+  (0x1523a6fe), which makes P8 tab-UI items (0x59486bf2) inside the label menu; moving past them
+  morphs a missing element (DoScreenElementMorph, module 0x24074). Not called any more (all builds).
+- `p8goals.py rekeynth` swaps one occurrence of a key in a script (not used by the build now).

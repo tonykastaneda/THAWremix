@@ -203,6 +203,17 @@ def main():
     elif sys.argv[1] == 'saveprompt':
         c = edit_script(sys.argv[2], sys.argv[3], 'career_scripts.qb.psp', 'game_progress_save_prompt', spawn_progress)
         print(f'game_progress_save_prompt: progression goes on after it ({len(c)} bytes)')
+    elif sys.argv[1] == 'rekeynth':  # <qb.pak> <qb.pab> <file> <script> <old> <new> <n (0-based)>
+        pk, pb, f, sc, old, new, nth = sys.argv[2:9]
+
+        def nth_only(code):
+            o, n_ = struct.pack('<I', p8qb.key(old)), struct.pack('<I', p8qb.key(new))
+            at = -1
+            for _ in range(int(nth) + 1):
+                at = code.index(o, at + 1)
+            return code[:at] + n_ + code[at + 4:]
+        edit_script(pk, pb, f, sc, nth_only)
+        print(f'{f} {sc}: occurrence {nth} of {old} -> {new}')
     elif sys.argv[1] == 'zonerekey':  # <zone .pak.psp> <script> <old> <new>
         zone_rekey(*sys.argv[2:6])
     elif sys.argv[1] == 'missions':
