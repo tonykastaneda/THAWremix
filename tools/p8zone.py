@@ -123,8 +123,15 @@ def top_items(data):
 NO_SPAWN = ('Pedestrian', 'Vehicle')
 
 # THAW ped profiles P8's profile_ped.qb lacks (a ped node naming one crashes ped creation: its
-# StructureContains reads the bare checksum as a struct), mapped to P8 profiles of the same kind
-PROFILES = {'Ped_Mindy': 'Ped_HippieF01', 'Ped_ShopOwner': 'Ped_Dave', 'Ped_SurPlus': 'Ped_Businessman01'}
+# StructureContains reads the bare checksum as a struct), and THAW's Hollywood profiles (z_ho_peds.qb),
+# whose parts (Ped_GenericSkater_*, ...) come from THAW's z_hoped pak, which P8 does not load. Only P8
+# profiles whose parts this zone has: Ped_HippieF01 and Ped_DVGuy (Houses' own); ped_Skater_02 crashed
+# (its parts are not loaded here).
+PROFILES = {'Ped_Mindy': 'Ped_HippieF01', 'Ped_ShopOwner': 'Ped_DVGuy', 'Ped_SurPlus': 'Ped_DVGuy',
+            'Z_HO_ped_Skater_02': 'Ped_DVGuy', 'Z_HO_ped_Skater_03': 'Ped_DVGuy', 'Z_HO_ped_Skater_03_skatelogic': 'Ped_DVGuy',
+            'Z_HO_Ped_FatConstruction': 'Ped_DVGuy', 'Z_HO_ped_bum_01': 'Ped_DVGuy', 'Z_HO_Ped_FallingDown': 'Ped_DVGuy',
+            'Z_HO_Ped_Asshole': 'Ped_DVGuy', 'Z_HO_Ped_Asshole_Roaming': 'Ped_DVGuy', 'Ped_MexicanGraffiti': 'Ped_DVGuy',
+            'Z_HO_ped_hippie_01': 'Ped_HippieF01', 'Z_HO_Pro_Reynolds': 'Ped_DVGuy'}
 
 
 def unspawn(data, zone, no_spawn=NO_SPAWN):

@@ -933,3 +933,11 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   `gamemode_options_menu_exit` compares the initials with the default (0x3bfd8eb7), renamed so it
   never matches. Classic: single/co-op, skater select, Play Level, P8's classic level select,
   Classic Goals difficulty, the run starts.
+
+### Goal peds visible
+
+- THAW's Hollywood ped profiles (z_ho_peds.qb, e.g. the caveman teacher's `Z_HO_ped_Skater_02`) use
+  parts from THAW's z_hoped pak, which P8 does not load. Mapped in `p8zone.PROFILES` to P8 profiles
+  whose parts this zone has: Ped_HippieF01 and Ped_DVGuy (Houses' own). ped_Skater_02 crashed
+  (module 0x8b25fc, parts not loaded). PPSSPP: the caveman teacher stands by the skater at the
+  goal's restart node (P8's DV guy). Real THAW ped models are still to do.
