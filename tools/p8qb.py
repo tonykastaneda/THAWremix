@@ -148,22 +148,27 @@ def pointer_sites(d):
     return sorted(set(sites)), items
 
 
-def swap_script(d, script_key, block):
-    """d with one script's [?][usz][csz][code] block replaced by block (from another build of the
-    file), every later offset moved by the size change."""
+def resize(d, at, old_len, new):
+    """d with the bytes at..at+old_len replaced by new (padded to 4), every later offset moved."""
     d = bytearray(d)
-    sites, items = pointer_sites(bytes(d))
-    p, t, k, v = next(i for i in items if i[2] == script_key and i[1] == 7)
-    old_len = (12 + struct.unpack_from('<I', d, v + 8)[0] + 3) & ~3
-    new = block + bytes(-len(block) % 4)
-    delta, end = len(new) - old_len, v + old_len
+    sites, _ = pointer_sites(bytes(d))
+    new = new + bytes(-len(new) % 4)
+    delta, end = len(new) - old_len, at + old_len
     for s in sites:
         x = struct.unpack_from('<I', d, s)[0]
         if x >= end:
             struct.pack_into('<I', d, s, x + delta)
-    out = d[:v] + new + d[end:]
+    out = d[:at] + new + d[end:]
     struct.pack_into('<I', out, 4, len(out))
     return bytes(out)
+
+
+def swap_script(d, script_key, block):
+    """d with one script's [?][usz][csz][code] block replaced by block (from another build of the
+    file), every later offset moved by the size change."""
+    _, items = pointer_sites(bytes(d))
+    p, t, k, v = next(i for i in items if i[2] == script_key and i[1] == 7)
+    return resize(d, v, (12 + struct.unpack_from('<I', d, v + 8)[0] + 3) & ~3, block)
 
 
 def script_block(d, script_key):
@@ -198,9 +203,9 @@ def swapscript(pakp, pabp, fname, script, donor):
 
 
 def setfield(pakp, pabp, fname, struct_name, field, value):
-    """One field of one top-level struct, rewritten in place: an integer value, or a key (0x hex or a
-    name) for a checksum-valued field. A struct is [?][first field]; a field is [type word][name]
-    [value][next], linked in file order."""
+    """One field of one top-level struct, rewritten in place: an integer value, a key (0x hex or a
+    name) for a checksum-valued field, or str:<text> for a string field. A struct is [?][first
+    field]; a field is [type word][name][value][next], linked in file order."""
     sys.path.insert(0, os.path.dirname(__file__))
     from p8zone import top_items
     p, b = open(pakp, 'rb').read(), bytearray(open(pabp, 'rb').read())
@@ -215,6 +220,15 @@ def setfield(pakp, pabp, fname, struct_name, field, value):
         f = u(f + 12)
     if not f:
         raise SystemExit(f'{field} not in {struct_name}')
+    if value.startswith('str:'):  # a string field's text, rewritten in place (it must fit the old one's room)
+        at, text = u(f + 8), value[4:].encode('latin-1') + bytes(1)
+        room = (d.index(0, at) - at + 4) & ~3
+        if d[f + 1] >> 1 != 3 or len(text) > room:
+            raise SystemExit(f'{field}: not a string, or {value[4:]!r} does not fit {room} bytes')
+        d[at:at + room] = text + bytes(room - len(text))
+        b[start:start + e['size']] = d
+        open(pabp, 'wb').write(b)
+        return print(f'{e["name"]} {struct_name}.{field} = {value[4:]!r}')
     if value.startswith('name:'):  # rename the field instead (e.g. to hide it from GotParam)
         at, new = f + 4, key(value[5:])
     else:
@@ -228,12 +242,16 @@ def setfield(pakp, pabp, fname, struct_name, field, value):
 
 def copyfield(pakp, pabp, fname, dst_struct, dst_field, src_struct, src_field):
     """Turns one field of a struct into a copy of another struct's field (same file): its type
-    word, name and value (a pointer value keeps pointing at the source's data); the link to the
-    next field stays. A way to give a struct a field it lacks, at the cost of one it can spare."""
+    word, name and value; the link to the next field stays. A way to give a struct a field it lacks,
+    at the cost of one it can spare. A pair or vector lives out of line, and the game's loader reads
+    a file's data in layout order (a pointer into another item, or data parked in an unlinked field
+    record, crashes it at boot): the destination must then be a string field, whose text is
+    replaced by the data, the rest of the file moved to fit; the file then goes to the end of the
+    .pab, its pack entry repointed."""
     sys.path.insert(0, os.path.dirname(__file__))
     from p8zone import top_items
-    p, b = open(pakp, 'rb').read(), bytearray(open(pabp, 'rb').read())
-    ents, _ = pak.read_entries(p)
+    p, b = bytearray(open(pakp, 'rb').read()), bytearray(open(pabp, 'rb').read())
+    ents, _ = pak.read_entries(bytes(p))
     e = next(e for e in ents if e['name'].lower().endswith(fname.lower()))
     start = e['offset'] - len(p)
     d = bytearray(b[start:start + e['size']])
@@ -248,10 +266,27 @@ def copyfield(pakp, pabp, fname, dst_struct, dst_field, src_struct, src_field):
             raise SystemExit(f'{fname_} not in {sname}')
         return f
     df, sf = field(dst_struct, dst_field), field(src_struct, src_field)
-    d[df:df + 12] = d[sf:sf + 12]
-    b[start:start + e['size']] = d
+    t = d[sf + 1] >> 1
+    if t not in (5, 6):
+        d[df:df + 12] = d[sf:sf + 12]
+        b[start:start + e['size']] = d
+        open(pabp, 'wb').write(b)
+        return print(f'{e["name"]} {dst_struct}.{dst_field} -> copy of {src_struct}.{src_field}')
+    if d[df + 1] >> 1 != 3:
+        raise SystemExit(f'{dst_struct}.{dst_field}: a pair or vector needs a string field to replace')
+    at, v = u(df + 8), u(sf + 8)
+    room = (d.index(0, at) - at + 4) & ~3
+    head = bytes(d[sf:sf + 8])
+    d = bytearray(resize(d, at, room, bytes(d[v:v + (12 if t == 5 else 16)])))
+    d[df:df + 8] = head  # the record lies before its data, so it did not move
+    b += bytes(-len(b) % 16)
+    pos = len(p) + len(b)
+    b += d
+    struct.pack_into('<II', p, e['entry_pos'] + 4, pos - e['entry_pos'], len(d))
+    open(pakp, 'wb').write(p)
     open(pabp, 'wb').write(b)
-    print(f'{e["name"]} {dst_struct}.{dst_field} -> copy of {src_struct}.{src_field}')
+    print(f'{e["name"]} {dst_struct}.{dst_field} -> copy of {src_struct}.{src_field} '
+          f'(in its string data, {room} -> {12 if t == 5 else 16} bytes; file moved to the end of the pab)')
 
 
 def rekey(pakp, pabp, fname, script, old, new):
@@ -301,7 +336,27 @@ def setglobal(pakp, pabp, fname, name, value):
     print(f'{e["name"]} {name}: {old:#x} -> {new & 0xFFFFFFFF:#x}')
 
 
+def compact(pakp, pabp):
+    """Rewrites the .pab with only the files its pack entries point at, in their order, 16-aligned:
+    rekey and copyfield leave the old copy of each file they move (the whole .pab is loaded into
+    memory, and the dead copies push it past what the game can spare)."""
+    p, b = bytearray(open(pakp, 'rb').read()), open(pabp, 'rb').read()
+    ents, _ = pak.read_entries(bytes(p))
+    out = bytearray()
+    for e in sorted(ents, key=lambda e: e['offset']):
+        out += bytes(-len(out) % 16)
+        at = e['offset'] - len(p)
+        struct.pack_into('<I', p, e['entry_pos'] + 4, len(p) + len(out) - e['entry_pos'])
+        out += b[at:at + e['size']]
+    out += bytes(-len(out) % 16)
+    open(pakp, 'wb').write(p)
+    open(pabp, 'wb').write(out)
+    print(f'{os.path.basename(pabp)}: {len(b)} -> {len(out)} bytes')
+
+
 def main():
+    if sys.argv[1] == 'compact':
+        return compact(*sys.argv[2:4])
     if sys.argv[1] == 'rekey':
         return rekey(*sys.argv[2:8])
     if sys.argv[1] == 'setglobal':

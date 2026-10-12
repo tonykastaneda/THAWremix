@@ -816,3 +816,32 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   are rekeyed to the Houses slot's load script (0x16a10a9a). A new career now plays P8's intro
   cutscene, loads Hollywood, and Start opens THAW's PAUSED menu.
 - Build: `P8V_THAWUI=1 python work/p8v/build.py`.
+
+### THAW pause-menu map on vanilla P8 (Hollywood)
+
+- P8 kept THAW's `pause_menu_map` (gamemenu_pause.qb): in a career the pause screen draws the level
+  struct's `level_map` texture with the skater's arrow (`Bike_arrow`) placed by `map_offset`,
+  `map_conversion` and `map_scale`. With the THAW front end (0x44689337 = 0) the pause screen is
+  THAW's PAUSED menu, so only the data was missing.
+- Level struct (Houses slot, 0xdb6cc528): `p8qb copyfield` turns spare fields into copies of
+  Level_Z_HO's: loading_time -> level_map, num_m_legs -> map_scale (inline values), no_sky (the
+  renamed sky) -> map_offset, ambient_track -> map_conversion. Pairs live out of line, and the
+  game's QB loader reads a file's data in layout order: a field pointing into Level_Z_HO's data
+  (later in the file), or pair data parked in an unlinked field record, crashed at boot (a raw
+  file offset freed as a pointer). So the pair replaces the destination string's data and the
+  rest of the file is relocated (`p8qb.resize`, which swap_script now uses too). Without
+  ambient_track the level has no ambience (THAW's z_ho_bg is not on the disc anyway).
+- The level's Name is "Hollywood" (`setfield ... str:`), shown by the pause clock.
+- Sprites (`tools/p8map.py`): as in Remix, two unused global.pak slots: 0x77b96927 (128x128,
+  16 colours) becomes `ho_level_map`, mouse_cursor (32x16, 16 colours, debugger only) becomes
+  `Bike_arrow` (THAW's 16x32 arrow turned a quarter counter-clockwise). Keys renamed in the pak
+  header, data replaced in the .pab, sizes unchanged. The script's `rot_angle = heading + 90`
+  becomes `heading + 180` (`p8qb rekey ... 0x5a 0xb4`; a negative angle turns counter-clockwise,
+  as the label menus' title_rotation -6 shows), so the drawn arrow equals THAW's.
+- `p8qb rekey`/`copyfield` move the edited file to the end of qb.pab and leave the old copy; with
+  four moved files the .pab was 165 KB over stock. `p8qb compact` now rewrites the .pab with live
+  files only (3,094,912 bytes vs 3,094,016 stock).
+- Open: starting a story crashed twice in a zone-map allocation (FUN_001b6548 -> 00186768, null
+  array with a non-zero count: an allocation that failed, so memory is short while Hollywood loads),
+  once before compaction and once after, in about 15 starts since. Not reproduced since (6 plain runs,
+  6 with a breakpoint). Watch for it; less memory at load is the likely fix.
