@@ -964,3 +964,19 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   2000 point combo", timer). Default build re-checked: story start to the caveman lesson, no faults.
 - Free Skate's level select lists the Houses slot as HOLLYWOOD (`p8qb setstr`: a pointed-to
   string replaced at any length, the file relocated). Its picture is still P8's Suburbs art.
+- Its picture is THAW's `levelposter_hollywood` (`tools/p8lsel.py`, into levelselect.pak's
+  0x61406c1d, P8's Suburbs picture; same 128x128 256-colour size).
+
+### State at the end of the 2026-10-12 run (vanilla P8, default build)
+
+- Front end: THAW label menus over the alley; Story, Classic, Free Skate, Create-A-Modes, Options work.
+- Story: Hollywood loads as career with THAW's zone scripts and all 31 Hollywood goals; the opening
+  atoms run (barber and clothing goals pass at once: shop entry not done; HO_2 cutscene skipped;
+  save prompt) up to "Learn from the Hollywood skaters"; goal peds appear (P8 stand-in models).
+  Checked with P8V_TESTGOAL: caveman lesson (wins, chains to the red ropes), sponsor challenge,
+  high combo.
+- Pause: THAW's PAUSED menu with the Hollywood map and arrow, level name, goal stars.
+- Level: THAW Hollywood geometry and collision, daytime sky, HUD balance meter, Houses ambience.
+- To do: shop entry (barber/clothing via CAS, as in Remix), THAW cutscenes and in-game scenes
+  (character paks), THAW ped and prop models, GameObjects (shops, bus, transition markers),
+  mission collision/scenes, the rest of the story beyond Hollywood.
