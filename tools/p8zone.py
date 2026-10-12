@@ -265,8 +265,12 @@ def main():
     ext = lambda e: pak.EXT.get(e['type'], '%08x' % e['type'])  # noqa: E731
 
     def thaw(kind, suffix=None):
-        """The THAW zone's largest entry of a type (named <zone><suffix>.qb.ps2 when given)."""
+        """The THAW zone's largest entry of a type (named <zone><suffix>.qb.ps2 when given); None when
+        the zone has none (the slot's own entry is kept then, e.g. z_mainmenu has no gap list)."""
         c = [e for e in tents if ext(e) == kind and (suffix is None or (e['name'] or '').lower().endswith(f'{zone}{suffix}.qb.ps2'))]
+        if not c:
+            print(f'THAW {zone} has no {kind}{suffix or ""}: the slot keeps its own')
+            return None
         e = max(c, key=lambda e: e['size'])
         return tblob[e['offset']:e['offset'] + e['size']]
 
@@ -291,6 +295,7 @@ def main():
             payloads[i] = thaw('.qb', '_peds')
         elif k == '.gap':
             payloads[i] = thaw('.gap')
+    payloads = {i: d for i, d in payloads.items() if d is not None}
     os.makedirs(a.outdir, exist_ok=True)
     drop = {i for i, e in enumerate(sents) if a.strip and ext(e) in TEMPLATE_PROPS}
     if drop:

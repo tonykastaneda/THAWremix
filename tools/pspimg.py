@@ -24,6 +24,8 @@ def read_psp(d):
     """Remix's .img.psp, or Project 8's (version 4, 'seSV', pixels not swizzled)."""
     ver, cks, lw, lh, fmt, z, z2, x10, w, h = struct.unpack_from('<6I4H', d, 0)
     W, H = 1 << lw, 1 << lh
+    if fmt == 0:  # 32-bit RGBA, no palette (P8's backgrounds and larger art), linear
+        return np.frombuffer(d, np.uint8, w * h * 4, 0x20).reshape(h, w, 4), (w, h), cks  # stored at the used size
     npal = 256 if fmt == 0x13 else 16
     pal = np.frombuffer(d, np.uint8, npal * 4, 0x20).reshape(npal, 4)
     p = 0x20 + npal * 4

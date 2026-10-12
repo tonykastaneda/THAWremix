@@ -771,3 +771,23 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   balancearrow_glow at the stock sizes and palette depth and rewrites global.pab in place.
   PPSSPP: a manual shows THAW's black arc with arrow ends and the ball.
 - Testing lesson: always look at (or measure) screenshots; a run's shot count says nothing.
+
+### THAW main menu look on vanilla P8: the alley and the logo
+
+- Remix did: THAW's label menu and items (compiled to Remix bytecode), THAW sprites and colours, and
+  the alley pre-rendered from THAW's menu camera onto panels (casbackdrop.py).
+- P8 already has THAW's label menu system (`scripts\mainmenu\labelmenu.qb` equals THAW's but for
+  spacing 4 vs 6). Loading THAW's whole z_mainmenu zone (converted alley + THAW's z_mainmenu
+  scripts) crashes in the .psp_level loader (module 0x97b94): THAW's menu scripts load
+  `Worlds\worldZones\Z_StorySelect\Z_StorySelect.psp_level`, which vanilla does not have (caught
+  with a breakpoint after the failing read; it is not a memory limit: a 175 KB menu level loads).
+- So, as in Remix, P8's menu logic stays and the look changes (`tools/p8menubg.py`):
+  - P8's z_mainmenu level is one 408x223 card behind the menu, 128x64 8-bit, upside down; a
+    calibration grid showed texels x 18.9..97.3, y 5.55..49.96 on screen. The texture is rebuilt
+    at 512x256 (256 colours, 3 mips; material list addresses/sizes rewritten) holding the Remix
+    alley render (work/backdrops/mainmenu.png) in that window.
+  - The bar's title art (image 0xC1F52B7E in the zone pak, 480x272 RGBA, format 0) gets THAW's
+    default logo on the bar's red.
+- `pspimg.read_psp` reads P8's format 0 (32-bit RGBA, stored at the used size).
+- Open: the bar and tab strip keep P8's red/blue; THAW's label menu layout itself needs a script
+  compiler for P8's (THAW's) bytecode, which does not exist yet (Remix's qbc writes THUG2's).
