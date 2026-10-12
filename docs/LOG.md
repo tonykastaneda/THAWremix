@@ -1034,3 +1034,13 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
 - Tried the P8V_NOGOALS in-game save check: inconclusive, the test copy stopped answering input
   (ppsspp_ws TimeoutError on input.buttons.send) during the run, no screenshots. Repeat it.
   The default build was rebuilt afterwards.
+
+### Main menu matched to the Remix build's look
+
+- Side by side with the Remix build's THAW main menu (work/shots/ns3_menu.png) the layout matched
+  (same THAW label menu, item positions within a few pixels), but our alley was much brighter: the
+  same render (work/backdrops/mainmenu.png), lit by the menu room in Remix and drawn unlit on P8.
+  Measured 0.54x on wall, bench and floor; `p8menubg.DIM = 0.54` darkens the card (main menu and
+  the submenus that share it). After: the ratios are ~1.0.
+- The legend's lowercase "Accept" (`\m0 Accept` in mainmenu_strings.qb) is "ACCEPT", as THAW's own
+  submenus have it (`p8qb setstr`).

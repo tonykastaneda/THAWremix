@@ -70,6 +70,9 @@ def regrow(data, w, h, npal=256, mips=3):
 # stripe-boundary points, mean error 0.20 texels).
 CARD = (0.9785, 1.1367, (263.3, -288.1))
 CORNERS = ((33.8, 229.4), (477.7, 225.8), (30.2, 26.6), (479.8, 30.0))
+# P8 draws the card unlit; in the Remix build the same render sits on a room panel under the room's
+# light, which the THAW menu look was matched to: its alley measures 0.54x ours (wall, bench, floor)
+DIM = 0.54
 
 
 def perspective_coeffs(src, dst):
@@ -265,7 +268,10 @@ def main():
         data = scale_card(data, CARD[0], CARD[1], CARD[2])
     data = regrow(data, w, h)
     fill = backdrop_warped if mode == 'label' else backdrop
-    data = psptex.replace(data, 0, fill(Image.open(png), w, h))
+    pic = fill(Image.open(png), w, h)
+    if mode == 'label':
+        pic[:, :, :3] = (pic[:, :, :3] * DIM).round().astype(np.uint8)
+    data = psptex.replace(data, 0, pic)
     open(dst, 'wb').write(data)
     print(f'{dst}: {w}x{h} backdrop, {len(data)} bytes')
 
