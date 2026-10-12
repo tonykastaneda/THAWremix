@@ -1005,3 +1005,7 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   never created (entry 1 empty), so 0x334b00 reads a null. The pushes come from 0x1c36b0,
   0x1c37a0 and 0x1c39c8 (save code). Next: see which of those runs on Save Game and what P8's own
   path creates first (likely a save/memcard heap set up by its tab-UI flow).
+- The stack holds the script engine's component pools: 0x1c37a0 creates reserve pools
+  (`Reserve CComponent` 20000, `Reserve CStruct` 9000, `Reserve CVector` 3000, via 0x32e07c / 0x32e41c
+  / 0x32e1a0). Saving pushes to that reserve without it having been created. Next: find the script
+  CFunc that leads to 0x1c37a0 (P8's save path calls it, THAW's does not) and call it before saving.
