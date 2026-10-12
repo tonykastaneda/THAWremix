@@ -92,6 +92,21 @@ converted THAW area should stay under:
 3. If P8 does not use the extra memory on its own, find out whether it can be made to (a heap
    size constant, a model check in the executable) and what that would take. Record it.
 
+Answered (2026-10-12):
+- P8 sizes its main region as `sceKernelMaxFreeMemSize() - 0xA2800` (FUN_000158dc), not a fixed
+  size. `GotExtraMemory` is a dev-kit check (DebugHeap fonts, model viewer), not a model check;
+  Project Mod adds nothing here (its executable differs from vanilla's by 37 bytes).
+- PPSSPP: PSP-1000 20.1 MB, PSP-2000 20.1 MB, **PSP-2000 with `MEMSIZE = 1` in PARAM.SFO 53.7 MB**
+  (+33.5 MB). No executable patch needed. Real hardware (CFW) still to check.
+- The ped heaps are script numbers: COIM (coim.qb global 0xcfae4518, 652,288), PedParts (per level in
+  load_level; Houses 401,472), AnimHeap (load_permanent_assets, 131,072).
+- Two builds (decided): `work/p8v/build.py` with `P8V_BIG=1` is the PSP-2000/3000 one (MEMSIZE = 1,
+  `p8goals heaps` at 4x: COIM 2,609,152, PedParts 1,605,888, AnimHeap 524,288). Every non-pigeon
+  Hollywood ped on, as a PSP-2000: loads; COIM 1.55 MB used (1.06 MB free), PedParts 1.20 MB free,
+  AnimHeap 376 KB free, TopDown 31.0 MB free. On the PSP-1000 build the same test fills COIM (about
+  20 peds).
+- Vita (Adrenaline): not checked yet.
+
 ### 2. Measure the current state at fixed points (both models)
 
 Same build, same button sequence, `p8heaps.py` at each point, saved as a table in docs/LOG.md:

@@ -1106,3 +1106,17 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
 - So with P8 stand-in models about 20 peds fit at once, bounded by the COIM heap (and AnimHeap close
   behind); each distinct THAW model would also need room in PedParts (full now). Cars need their
   models converted or another P8 level's.
+
+### PSP-2000/3000 build: extra memory with MEMSIZE
+
+- P8's heap setup (FUN_000158dc): main region = `sceKernelMaxFreeMemSize() - 0xA2800`, split into
+  TopDown/BottomUp. Imports (tools via module info stubs): AllocPartitionMemory, GetBlockHeadAddr,
+  MaxFreeMemSize, TotalFreeMemSize, VolatileMemTryLock; no sceKernelGetModel (vanilla or Project Mod).
+- `tools/sfo.py`: list or set PARAM.SFO integer keys. PPSSPP as PSP-2000 with `MEMSIZE = 1`: TopDown
+  53,669,888 bytes (PSP-1000 or PSP-2000 without it: 20,115,456).
+- `p8goals.py heaps`: COIM (coim.qb global 0xcfae4518), Houses' PedParts (load_level's 401472
+  literal), AnimHeapSize (load_permanent_assets' 131072 literal). `savecoim` takes the COIM size so
+  the save's heap swap remakes the same size.
+- `P8V_BIG=1` build (MEMSIZE + heaps 4x) with every non-pigeon Hollywood ped on, as PSP-2000: loads,
+  no faults; COIM 1,548,288 used of 2,609,152, PedParts 401,424 used of 1,605,888, AnimHeap 148 KB used
+  of 512 KB, TopDown 30,978,240 free. More peds on screen than the PSP-1000 run.

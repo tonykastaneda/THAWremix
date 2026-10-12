@@ -4,6 +4,8 @@
       P8's goal_load_pak takes THAW's prefix/suffix (see patch_goal_load_pak)
   p8goals.py igcskip <qb.pak.psp> <qb.pab.psp>
       in-game cutscenes skipped (see skip_igc)
+  p8goals.py heaps <qb.pak.psp> <qb.pab.psp> <COIM> <PedParts> <AnimHeap>
+      bigger ped heaps for the PSP-2000/3000 build (see heaps)
   p8goals.py missions <THAW PS2 data dir> <outdir> <empty .psp_level> <prefix> [<prefix> ...]
       THAW's mission paks (missions\\worldzones\\<m>\\<m>_<part>\\<m>_<part>.pak.ps2) as P8 mission paks,
       each with an empty scene: on PSP, P8's goal_load_pak also loads <name>.psp_level (a missing
@@ -164,7 +166,28 @@ def call_line(func, **params):
 COIM_SIZE = 652288  # Hollywood's COIM heap, measured at the pause menu (all of it free there)
 
 
-def coim_around_save(pakp, pabp):
+def int_once(old, new):
+    """edit_script fn: the one integer literal old -> new."""
+    def edit(code):
+        o, n = bytes([0x17]) + struct.pack('<i', old), bytes([0x17]) + struct.pack('<i', new)
+        if code.count(o) != 1:
+            raise SystemExit(f'{old}: {code.count(o)} integer literals, not 1')
+        return code.replace(o, n)
+    return edit
+
+
+def heaps(pakp, pabp, coim, pedparts, anim):
+    """Bigger ped heaps for the PSP-2000/3000 build (MEMSIZE = 1 in PARAM.SFO: P8 sizes its main
+    region from sceKernelMaxFreeMemSize, so it grows by itself; these three are script numbers):
+    the COIM heap (coim.qb's global 0xcfae4518), Houses' PedParts heap (load_level) and the animation
+    heap (load_permanent_assets' InitAnimSystem AnimHeapSize)."""
+    p8qb.setglobal(pakp, pabp, 'game' + chr(92) + 'coim.qb.psp', '0xcfae4518', str(coim))
+    edit_script(pakp, pabp, 'game' + chr(92) + 'levels.qb.psp', 'load_level', int_once(401472, pedparts))
+    edit_script(pakp, pabp, 'game' + chr(92) + 'startup.qb.psp', 'load_permanent_assets', int_once(131072, anim))
+    print(f'heaps: COIM {coim}, PedParts (Houses) {pedparts}, AnimHeap {anim}')
+
+
+def coim_around_save(pakp, pabp, coim=COIM_SIZE):
     """Saving pushes temporary script pools (20000 CComponent, 9000 CStruct, 3000 CVector, ~440 KB)
     onto the main heap, which has 422 KB free with THAW's Hollywood and its goals loaded: the last
     pool comes back null and the engine's pool report crashes reading it. The COIM heap (652 KB,
@@ -189,8 +212,8 @@ def coim_around_save(pakp, pabp):
     edit_script(pakp, pabp, 'menu' + chr(92) + 'memcard.qb.psp', 'UnloadAnimsAndCreateMemCardPools',
                 before_first('PushTemporaryMemCardPools', call_line('ResizeCOIMHeap', newsize=0)))
     edit_script(pakp, pabp, 'menu' + chr(92) + 'memcard.qb.psp', 'RemoveMemCardPoolsAndLoadAnims',
-                after_first('PopTemporaryMemCardPools', call_line('ResizeCOIMHeap', newsize=COIM_SIZE)))
-    print(f'memcard pools: COIM heap dropped for the save, made again at {COIM_SIZE} bytes after')
+                after_first('PopTemporaryMemCardPools', call_line('ResizeCOIMHeap', newsize=coim)))
+    print(f'memcard pools: COIM heap dropped for the save, made again at {coim} bytes after')
 
 
 def zone_rekey(pak_path, script, old, new):
@@ -284,8 +307,10 @@ def main():
             return code[:at] + n_ + code[at + 4:]
         edit_script(pk, pb, f, sc, nth_only)
         print(f'{f} {sc}: occurrence {nth} of {old} -> {new}')
-    elif sys.argv[1] == 'savecoim':
-        coim_around_save(*sys.argv[2:4])
+    elif sys.argv[1] == 'savecoim':  # <qb.pak> <qb.pab> [COIM size]
+        coim_around_save(*sys.argv[2:4], *map(int, sys.argv[4:5]))
+    elif sys.argv[1] == 'heaps':  # <qb.pak> <qb.pab> <COIM> <PedParts> <AnimHeap>
+        heaps(*sys.argv[2:4], *map(int, sys.argv[4:7]))
     elif sys.argv[1] == 'zonerekey':  # <zone .pak.psp> <script> <old> <new>
         zone_rekey(*sys.argv[2:6])
     elif sys.argv[1] == 'missions':
