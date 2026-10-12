@@ -122,6 +122,10 @@ def top_items(data):
 # .psp_level has no level objects (nObjs 0) for them to attach to.
 NO_SPAWN = ('Pedestrian', 'Vehicle')
 
+# THAW ped profiles P8's profile_ped.qb lacks (a ped node naming one crashes ped creation: its
+# StructureContains reads the bare checksum as a struct), mapped to P8 profiles of the same kind
+PROFILES = {'Ped_Mindy': 'Ped_HippieF01', 'Ped_ShopOwner': 'Ped_Dave', 'Ped_SurPlus': 'Ped_Businessman01'}
+
 
 def unspawn(data, zone, no_spawn=NO_SPAWN):
     """Turns CreatedAtStart into AbsentInNetGames (inert offline) in the node array's ped and vehicle
@@ -284,7 +288,8 @@ def main():
         elif k == '.col':
             payloads[i] = open(a.col, 'rb').read() if a.col else thaw('.col')
         elif k == '.nqb' and n.endswith(f'{tz}.qb.psp'):
-            payloads[i], fixed = fix_blips(rename(thaw('.nqb', ''), renames))
+            profiles = {qbkey(a_): qbkey(b_) for a_, b_ in PROFILES.items()}
+            payloads[i], fixed = fix_blips(rename(thaw('.nqb', ''), {**renames, **profiles}))
             print(f'compass blips moved to P8 types: {fixed}')
             if not a.spawn_peds:
                 payloads[i], fixed = unspawn(payloads[i], slot, a.no_spawn.split(','))

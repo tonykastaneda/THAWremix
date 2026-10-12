@@ -847,3 +847,42 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   array with a non-zero count: an allocation that failed, so memory is short while Hollywood loads),
   once before compaction and once after, in about 15 starts since. Not reproduced since (6 plain runs,
   6 with a breakpoint). Watch for it; less memory at load is the likely fix.
+
+### THAW's story runs on vanilla P8: Hollywood goals and the opening atoms
+
+- Script tracing: the engine's `Printf` CFunc is a stub in retail (0x0896bfb4, from the CFunc
+  table {name, func} in the image), but a PPSSPP breakpoint on it gets each call's parameter struct
+  (a0 + 4: first component; component = [?][type][?][?] name, value, next; in memory string 6,
+  int 2, checksum 26, struct 7). The scratchpad tracer `bpprintf.py` prints them, plus calls to
+  PlayMovie, PlayCutscene, ScriptAssert, GoalManager_AddGoal/ActivateGoal, CareerFunc and LoadPak.
+- P8 kept THAW's whole story machinery: the goal templates (AddGoal_Gaps, ...), goal_utilities,
+  view goals, and THAW's chapter_info atom structure (barber `z_ho_goal_gaps15`, clothing shop,
+  HO_2.cut, caveman, sponsor, ...). With THAW's own zone scripts (p8zone without --keep-scripts)
+  `Z_HO_Goals` adds all 31 Hollywood story goals. Fixes needed, all in `P8V_GOALS=1` builds:
+  - Ped profiles THAW's nodes name and P8 lacks crash ped creation (StructureContains on a bare
+    checksum): `p8zone.PROFILES` maps Ped_Mindy, Ped_ShopOwner, Ped_SurPlus to P8 profiles.
+  - THAW's Start New Story sets `CAREER_ONETIMEINTRO` (its story-select opening). While set, the
+    zone map comes from `SkateZonesStoryOpening` (no Z_Houses: CreateZoneMap crash, module
+    0x1878cc; this was also the intermittent story-start crash, now fixed for every build by using
+    `SkateZones`), load_level loads the zone as freeskate2p (only multiplayer goals get added) and
+    `game_progress_process_status` returns at once. The story start now sets CAREER_STARTED instead.
+  - P8's career opening clip (`c\C_s_int`, script 0x5ea3b6b7) runs out of memory with THAW's
+    goals loaded (movie player crash, module 0x1aa298): not played.
+  - P8's `goal_load_pak` takes a flat `pak_short_name`; THAW's goals pass prefix/suffix (LoadPak of
+    an empty name, module 0xf480). `p8goals.py loadpak` prepends `if not GotParam pak_short_name /
+    FormatText pak_short_name "%p_%s" / endif` (hand-assembled bytecode; an if's u16 is the
+    distance to its endif).
+  - `p8goals.py missions` repacks THAW PS2's 80 Hollywood mission paks
+    (`missions\worldzones\<m>\<m>_<part>\...`) flat as `missions\worldzones\<m>_<part>\<m>_<part>.pak.psp`
+    with their node arrays and scripts (models and anims not converted yet), each with P8's 72-byte
+    empty `.psp_level` (on PSP goal_load_pak also loads the mission's scene; a missing one stops
+    the game in the level loader, module 0x97b94). `hed.py add` puts them in the archive.
+  - THAW's in-game cutscenes need its character paks (`Pak/IGC/IGC_Mindy`, ...): `p8goals.py
+    igcskip` cuts `igc_player_run` to its defaults, start_script, end_script, igc_playing = 0 and
+    the igc_scene_finished broadcast.
+- Result (PPSSPP, Story Mode > Start New > Normal): Hollywood loads as career, THAW's progression
+  runs (UpdateAtoms, the starting $120, ActivateGoal z_ho_goal_gaps15, its start and gameplay
+  mission paks). The skater stands on foot at the barber shop door, "Change your hair" on the HUD,
+  the goal star on the pause map, View Missions "Go to the barber shop."
+- Next: the barber and clothing goals finish by walking into the shop (THAW's Ghost GameObjects,
+  which P8 cannot create): as in the Remix build, a door check opening Create-A-Skater.
