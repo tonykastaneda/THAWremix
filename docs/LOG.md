@@ -1086,3 +1086,23 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   it whole used up system memory and restarted herdr under SSH (session 0, where D3D11 fails).
   `ppsspp_ws.start` now keeps one log per boot and launches through the scheduled task
   "THX PPSSPP test" (desktop session) when it runs in session 0.
+
+### How many peds load in Hollywood (vanilla P8, PSP-1000 test copy)
+
+- Hollywood's node array has 63 Pedestrians and 4 Vehicles. THAW creates only 12 at start: 3 people
+  (a skater, a BMX rider, the construction "goat lover"), 5 pigeons and 4 cars; the other 55 peds
+  belong to goals. P8's Houses has no crowd or traffic at all: 5 goal peds, and its Vehicles are
+  playground props (swings, seesaw, merry-go-round, boat mast). No P8 car models load in this slot.
+- `p8zone.py --create <classes>` (tests: AbsentInNetGames -> CreatedAtStart, shared structs too) and
+  `--map THAW=P8,...` (extra profile stand-ins); `work/p8v/build.py` takes `P8V_NOSPAWN` and
+  `P8V_ZONEARGS`. `Ped_BMX` -> `Ped_DVGuy` added to PROFILES.
+- Same route as the level reduction (TopDown free at the end; reduced level, default build 1,502,000):
+  - THAW's 3 start people on (pigeons and cars off): loads, no faults; TopDown 1,471,520 (-30 KB),
+    COIM heap 86 KB used (empty before): about 29 KB per ped there.
+  - Every non-pigeon ped on (21 CreatedAtStart flips, shared structs included; Rick Thorne, Murphy,
+    the barber and Boone mapped to Ped_DVGuy): loads, no faults; TopDown 1,315,392 (-187 KB), COIM
+    50 KB free of 652 KB (about 21 peds' worth), AnimHeap 2 KB free of 128 KB. Peds beyond what
+    COIM holds are not created (no crash).
+- So with P8 stand-in models about 20 peds fit at once, bounded by the COIM heap (and AnimHeap close
+  behind); each distinct THAW model would also need room in PedParts (full now). Cars need their
+  models converted or another P8 level's.

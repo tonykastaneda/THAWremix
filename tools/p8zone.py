@@ -131,7 +131,7 @@ PROFILES = {'Ped_Mindy': 'Ped_HippieF01', 'Ped_ShopOwner': 'Ped_DVGuy', 'Ped_Sur
             'Z_HO_ped_Skater_02': 'Ped_DVGuy', 'Z_HO_ped_Skater_03': 'Ped_DVGuy', 'Z_HO_ped_Skater_03_skatelogic': 'Ped_DVGuy',
             'Z_HO_Ped_FatConstruction': 'Ped_DVGuy', 'Z_HO_ped_bum_01': 'Ped_DVGuy', 'Z_HO_Ped_FallingDown': 'Ped_DVGuy',
             'Z_HO_Ped_Asshole': 'Ped_DVGuy', 'Z_HO_Ped_Asshole_Roaming': 'Ped_DVGuy', 'Ped_MexicanGraffiti': 'Ped_DVGuy',
-            'Z_HO_ped_hippie_01': 'Ped_HippieF01', 'Z_HO_Pro_Reynolds': 'Ped_DVGuy'}
+            'Z_HO_ped_hippie_01': 'Ped_HippieF01', 'Z_HO_Pro_Reynolds': 'Ped_DVGuy', 'Ped_BMX': 'Ped_DVGuy'}
 
 
 def unspawn(data, zone, no_spawn=NO_SPAWN):
@@ -172,6 +172,43 @@ def unspawn(data, zone, no_spawn=NO_SPAWN):
                 struct.pack_into('<I', data, f + 8, qbkey('AbsentInNetGames'))
                 fixed += 1
     return bytes(data), fixed
+
+
+def create(data, zone, classes):
+    """unspawn's opposite (tests): AbsentInNetGames -> CreatedAtStart in the matching structs."""
+    data = bytearray(data)
+    u = lambda o: struct.unpack_from('<I', data, o)[0]  # noqa: E731
+    items = top_items(bytes(data))
+    shared = {k: v for k, (t, v) in items.items() if t == 10}
+    arr = items[qbkey(f'{zone}_NodeArray')][1]
+    n, base = u(arr + 4), u(arr + 8)
+    want = {(qbkey(c.split(':')[0]), qbkey(c.split(':')[1]) if ':' in c else None) for c in classes}
+    absent, cas, done = qbkey('AbsentInNetGames'), qbkey('CreatedAtStart'), 0
+    for i in range(n):
+        s = u(base + 4 * i)
+        fields, f = [], u(s + 4)
+        while f:
+            fields.append(f)
+            f = u(f + 12)
+        subs = [shared[u(f + 8)] for f in fields if u(f + 4) == 0 and u(f + 8) in shared]
+        allf = list(fields)
+        for t in subs:
+            f = u(t + 4)
+            while f:
+                allf.append(f)
+                f = u(f + 12)
+        get = lambda key: next((u(f + 8) for f in allf if u(f + 4) == key), None)  # noqa: E731
+        cls, typ = get(qbkey('Class')), get(qbkey('Type'))
+        if (cls, None) not in want and (cls, typ) not in want:
+            continue
+        if any(u(f + 4) == 0 and u(f + 8) == cas for f in allf):
+            continue
+        for f in allf:
+            if u(f + 4) == 0 and u(f + 8) == absent:
+                struct.pack_into('<I', data, f + 8, cas)
+                done += 1
+                break
+    return bytes(data), done
 
 
 def rename(data, renames):
@@ -266,6 +303,8 @@ def main():
     ap.add_argument('--keep-scripts', action='store_true',
                     help="keep the slot's zone scripts (THAW's crash vanilla P8 as they stand)")
     ap.add_argument('--spawn-peds', action='store_true', help="keep THAW's peds and vehicles CreatedAtStart")
+    ap.add_argument('--create', default='', help='tests: node classes made CreatedAtStart (comma list)')
+    ap.add_argument('--map', default='', help='tests: extra ped profile stand-ins, THAW=P8 (comma list)')
     ap.add_argument('--no-spawn', default=','.join(NO_SPAWN), help='node classes left uncreated (comma list)')
     a = ap.parse_args()
     zone, slot = a.zone.lower(), a.slot.lower()
@@ -295,9 +334,13 @@ def main():
         elif k == '.col':
             payloads[i] = open(a.col, 'rb').read() if a.col else thaw('.col')
         elif k == '.nqb' and n.endswith(f'{tz}.qb.psp'):
-            profiles = {qbkey(a_): qbkey(b_) for a_, b_ in PROFILES.items()}
+            extra = dict(m.split('=') for m in a.map.split(',') if m)
+            profiles = {qbkey(a_): qbkey(b_) for a_, b_ in {**PROFILES, **extra}.items()}
             payloads[i], fixed = fix_blips(rename(thaw('.nqb', ''), {**renames, **profiles}))
             print(f'compass blips moved to P8 types: {fixed}')
+            if a.create:
+                payloads[i], made = create(payloads[i], slot, a.create.split(','))
+                print(f'{a.create} made CreatedAtStart: {made}')
             if not a.spawn_peds:
                 payloads[i], fixed = unspawn(payloads[i], slot, a.no_spawn.split(','))
                 print(f'{a.no_spawn} left uncreated: {fixed} CreatedAtStart flags')
