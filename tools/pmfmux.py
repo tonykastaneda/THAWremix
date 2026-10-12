@@ -1,6 +1,6 @@
 """Make PSP movies (PSMF .pmf) from any video ffmpeg reads, for THUG2 Remix.
 
-  pmfmux.py <input video> <out.pmf> [--template <a stock .pmf>] [--vbitrate 700k]
+  pmfmux.py <input video> <out.pmf> [--template <a stock .pmf>] [--vbitrate 700k] [--crop W:H:X:Y]
 
 Layout copied from Remix's own movies (USRDIR\\Movies\\*.pmf):
   header   0x800 bytes; the template's header with data size (0x0C) and the end timestamp
@@ -96,9 +96,11 @@ def sector(scr, packet, first=False):
     return s
 
 
-def encode_video(src, out, bitrate, seconds=None, start=None):
-    cmd = ['ffmpeg', '-v', 'error', '-y', '-i', src, '-an', '-vf',
-           'scale=480:272:force_original_aspect_ratio=decrease,pad=480:272:(ow-iw)/2:(oh-ih)/2,setsar=1',
+def encode_video(src, out, bitrate, seconds=None, start=None, crop=None):
+    vf = 'scale=480:272:force_original_aspect_ratio=decrease,pad=480:272:(ow-iw)/2:(oh-ih)/2,setsar=1'
+    if crop:  # e.g. THAW's 640x480 videos hold a 16:9 picture at 640:360:0:60; that fills the screen
+        vf = f'crop={crop},scale=480:272,setsar=1'
+    cmd = ['ffmpeg', '-v', 'error', '-y', '-i', src, '-an', '-vf', vf,
            '-r', '30000/1001', '-c:v', 'libx264', '-profile:v', 'main', '-level', '2.1', '-pix_fmt', 'yuv420p',
            '-b:v', bitrate, '-maxrate', bitrate, '-bufsize', '1000k',
            # as Sony's encodes in Remix's own movies: no B-frames (picture order type 2), one
@@ -228,10 +230,11 @@ def main():
     ap.add_argument('--vbitrate', default='700k')
     ap.add_argument('--seconds', type=float)
     ap.add_argument('--start', type=float)
+    ap.add_argument('--crop', help='ffmpeg crop W:H:X:Y applied before scaling to 480x272')
     a = ap.parse_args()
     tmp = tempfile.mkdtemp(prefix='pmf_')
     h264 = os.path.join(tmp, 'v.h264')
-    encode_video(a.input, h264, a.vbitrate, a.seconds, a.start)
+    encode_video(a.input, h264, a.vbitrate, a.seconds, a.start, a.crop)
     data = open(h264, 'rb').read()
     aus = access_units(data)
     times = frame_types(h264 + '.mp4')

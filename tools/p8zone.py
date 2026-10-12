@@ -1,6 +1,6 @@
 """A THAW zone in a Project 8 PSP (Tony Hawk's Project Mod) zone slot.
 
-  p8zone.py <THAW PS2 data dir> <zone> <slot zone .pak.psp> <converted .psp_level> <outdir> [--slot z_sc]
+  p8zone.py <THAW PS2 data dir> <zone> <slot zone .pak.psp> <converted .psp_level> <outdir> [--slot z_sc] [--template <zone of the pak>]
 
 P8 PSP is THAW's engine generation: its zone pak holds THAW's own formats (v10 collision, THAW QB
 node array and scripts), and its render geometry is the Remix-style v11 .psp_level that
@@ -172,20 +172,66 @@ def load_pak(path):
     return ents, blob
 
 
-def write_pak(slot_path, payloads):
-    """The slot pak with entry i's data replaced by payloads[i]; data re-laid 16-aligned after the
-    header, in the original order."""
+def write_pak(slot_path, payloads, drop=()):
+    """The slot pak with entry i's data replaced by payloads[i] and the entries in drop left out;
+    data re-laid 16-aligned after the header, in the original order."""
     hdr = open(slot_path, 'rb').read()
-    ents, _ = pak.read_entries(hdr)
+    ents, end = pak.read_entries(hdr)
     first = min(e['offset'] for e in ents)
-    out = bytearray(hdr[:first])
-    datas = [payloads.get(i, hdr[e['offset']:e['offset'] + e['size']]) for i, e in enumerate(ents)]
-    for i, (e, d) in enumerate(zip(ents, datas)):
+    keep = [(i, e) for i, e in enumerate(ents) if i not in drop]
+    out, pos = bytearray(), []
+    for i, e in keep:
+        size = 0xC0 if e['flags'] & 0x20 else 0x20
+        pos.append(len(out))
+        out += hdr[e['entry_pos']:e['entry_pos'] + size]
+    out += hdr[end:first]  # the end entry and padding
+    for (i, e), p in zip(keep, pos):
+        d = payloads.get(i, hdr[e['offset']:e['offset'] + e['size']])
         out += bytes(-len(out) % 16)
-        struct.pack_into('<II', out, e['entry_pos'] + 4, len(out) - e['entry_pos'], len(d))
+        struct.pack_into('<II', out, p + 4, len(out) - p, len(d))
         out += d
     out += bytes(-len(out) % 16)
     return bytes(out)
+
+
+# the template zone's own props: models, their textures, skeletons, animations, object scripts and
+# particles; they belong to the template's nodes (Houses' playground), not the zone put in its place
+TEMPLATE_PROPS = {'.mdl', '.stex', '.ske', '.ska', '.pfx', '4bc1e85e', '6290993b', '91e1028d'}
+
+
+# entries of a zone pak whose key is qbkey('worlds\worldzones\<zone>\<zone><suffix>') (the entry
+# path less .psp); the named ones also carry that path, plus .psp, as their name
+ZONE_SUFFIXES = ('.geom', '.col', '.gap', '.tex', '.pfx', '.scn', '.qb', '_scripts.qb', '_peds.qb',
+                 '_sfx_dat_psp.qb', '_sfx_scripts.qb')
+
+
+def retarget(data, old, new):
+    """Moves a zone pak built from zone <old>'s pak over to zone <new>: entry names, and every key
+    field (pak key, full key, name key) holding a key of the zone's paths. Shipped paks key on the
+    path less .psp; the Project Mod's own on the path with .psp, and give unnamed entries the zone's
+    base path (worlds\\worldzones\\<zone>\\<zone>) as name key. All of those forms are mapped."""
+    data = bytearray(data)
+    ents, _ = pak.read_entries(bytes(data))
+    path = lambda z, s: f'worlds\\worldzones\\{z}\\{z}{s}'  # noqa: E731
+    keys = {}
+    for s in ZONE_SUFFIXES + ('',):
+        for tail in ('', '.psp'):
+            keys[qbkey(path(old, s) + tail)] = qbkey(path(new, s) + tail)
+    bare = lambda n: n[:-4] if n.lower().endswith('.psp') else n  # noqa: E731
+    for e in ents:
+        if e['name'] and e['name'].lower().startswith(path(old, '').lower()):
+            name = path(new, e['name'][len(path(old, '')):])
+            data[e['entry_pos'] + 0x20:e['entry_pos'] + 0x20 + 160] = name.encode('latin-1').ljust(160, b'\0')
+            keys[qbkey(e['name'])] = qbkey(name)  # the entry's own path keys, whatever its suffix
+            keys[qbkey(bare(e['name']))] = qbkey(bare(name))
+    moved = 0
+    for e in ents:
+        for field in (12, 16, 20):
+            k = struct.unpack_from('<I', data, e['entry_pos'] + field)[0]
+            if k in keys:
+                struct.pack_into('<I', data, e['entry_pos'] + field, keys[k])
+                moved += 1
+    return bytes(data), moved
 
 
 def main():
@@ -195,11 +241,14 @@ def main():
     ap.add_argument('slot_pak')
     ap.add_argument('level')
     ap.add_argument('outdir')
-    ap.add_argument('--slot', default='z_sc')
+    ap.add_argument('--slot', default='z_sc', help='zone the output is for')
+    ap.add_argument('--template', help="zone of slot_pak when it is not --slot (e.g. z_houses's pak for a new z_ho)")
+    ap.add_argument('--strip', action='store_true', help="leave out the slot pak's own props (TEMPLATE_PROPS)")
     ap.add_argument('--no-peds', action='store_true', help="keep the slot's peds file")
     ap.add_argument('--spawn-peds', action='store_true', help="keep THAW's peds and vehicles CreatedAtStart")
     a = ap.parse_args()
     zone, slot = a.zone.lower(), a.slot.lower()
+    tz = (a.template or slot).lower()
 
     tents, tblob = load_pak(os.path.join(a.thaw_data, 'worlds', 'worldzones', zone, f'{zone}.pak.ps2'))
     sents, sblob = load_pak(a.slot_pak)
@@ -220,20 +269,27 @@ def main():
             payloads[i] = write_geom(lvl, sblob[e['offset']:e['offset'] + e['size']])
         elif k == '.col':
             payloads[i] = thaw('.col')
-        elif k == '.nqb' and n.endswith(f'{slot}.qb.psp'):
+        elif k == '.nqb' and n.endswith(f'{tz}.qb.psp'):
             payloads[i], fixed = fix_blips(rename(thaw('.nqb', ''), renames))
             print(f'compass blips moved to P8 types: {fixed}')
             if not a.spawn_peds:
                 payloads[i], fixed = unspawn(payloads[i], slot)
                 print(f'peds and vehicles left uncreated: {fixed} CreatedAtStart flags')
-        elif k == '.sqb' and n.endswith(f'{slot}_scripts.qb.psp'):
+        elif k == '.sqb' and n.endswith(f'{tz}_scripts.qb.psp'):
             payloads[i] = rename(thaw('.sqb', '_scripts'), renames)
-        elif k == '.qb' and n.endswith(f'{slot}_peds.qb.psp') and not a.no_peds:
+        elif k == '.qb' and n.endswith(f'{tz}_peds.qb.psp') and not a.no_peds:
             payloads[i] = thaw('.qb', '_peds')
         elif k == '.gap':
             payloads[i] = thaw('.gap')
     os.makedirs(a.outdir, exist_ok=True)
-    open(os.path.join(a.outdir, f'{slot}.pak.psp'), 'wb').write(write_pak(a.slot_pak, payloads))
+    drop = {i for i, e in enumerate(sents) if a.strip and ext(e) in TEMPLATE_PROPS}
+    if drop:
+        print(f'left out {len(drop)} of the slot pak\'s own prop entries')
+    out = write_pak(a.slot_pak, payloads, drop)
+    if tz != slot:
+        out, moved = retarget(out, tz, slot)
+        print(f'entries moved from {tz} to {slot}: {moved}')
+    open(os.path.join(a.outdir, f'{slot}.pak.psp'), 'wb').write(out)
     shutil.copyfile(a.level, os.path.join(a.outdir, f'{slot}.psp_level'))
     print(f'{slot}.pak.psp: {len(payloads)} entries replaced ({", ".join(ext(sents[i]) for i in sorted(payloads))}); '
           f'{lvl.n_boxes} sectors; renamed {", ".join(ZONE_KEYS)}')

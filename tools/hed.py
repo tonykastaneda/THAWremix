@@ -3,6 +3,7 @@
   hed.py list <hed> [--sectors]
   hed.py extract <hed> <wad> <outdir> [--sectors] [--match <substring>]
   hed.py replace <hed> <wad> <archive path> <new file> [--sectors]
+  hed.py add <hed> <wad> <archive path> <new file> [--sectors]   (replace if listed, else a new entry)
 
 Each index entry is offset, size, then a NUL-terminated path padded to four bytes. THUG2 Remix
 (PSP) stores byte offsets; THAW PS2 stores 2048-byte sector numbers (--sectors).
@@ -59,10 +60,33 @@ def replace(hed, wad, name, src, sectors=False):
     open(hed, 'wb').write(data)
 
 
+def add(hed, wad, name, src, sectors=False):
+    """A new index entry (before the 0xFFFFFFFF end marker) with the file appended to the wad; a name
+    already listed is replaced instead. The index is not sorted, so the end is as good as anywhere."""
+    if any(n.lower() == name.lower() for n, _, _ in read_hed(hed, sectors)):
+        return replace(hed, wad, name, src, sectors)
+    data = bytearray(open(hed, 'rb').read())
+    new = open(src, 'rb').read()
+    p = 0
+    while p + 8 <= len(data) and struct.unpack_from('<I', data, p)[0] != 0xFFFFFFFF:
+        p = (data.index(b'\0', p + 8) + 4) & ~3
+    with open(wad, 'r+b') as f:
+        f.seek(0, 2)
+        off = f.tell() + 2047 & ~2047
+        f.seek(off)
+        f.write(new + bytes(-len(new) % 2048))
+    raw = name.encode('latin-1') + b'\0'
+    data[p:p] = struct.pack('<II', off // 2048 if sectors else off, len(new)) + raw + bytes(-len(raw) % 4)
+    open(hed, 'wb').write(data)
+    print(f'{name}: new entry, {len(new)} bytes at {off:#x}')
+
+
 def main():
     args = sys.argv[1:]
     if args[0] == 'replace':
         return replace(*args[1:5], sectors='--sectors' in args)
+    if args[0] == 'add':
+        return add(*args[1:5], sectors='--sectors' in args)
     sectors = '--sectors' in args
     match = None
     if '--match' in args:

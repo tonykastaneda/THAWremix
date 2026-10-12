@@ -582,3 +582,109 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   - 994 of the 1,051 THAW engine function names its scripts call are named in this EBOOT; most of
     the missing ones are park editor and keyboard functions.
   - The mod ships 43 zones, including Remix's levels (z_ap, z_au, z_ba, ...) and z_mainmenu.
+
+### THAW boot and loading screens on Project 8
+
+- P8's load screens are per zone: `images\raw\us\loadscrn_us\loadscrn_<zone>.img.psp` (plus
+  `loadscrn_generic`). Each is a 0x20 header (format 2, 512x274) then 512x274 linear RGBA8888; the
+  picture is 480x272 at the top left with alpha 0x80 (some files use 0xFF), and columns 480-511 are
+  alpha 0. The boot screen is `images\raw\us\legal\loadscrn_us.tga` (and `_uk`), 480x272 24-bit
+  bottom-up, like Remix's `legal.tga`. Saves use `disc0:/PSP_GAME/ICON0.PNG` and `PIC1.PNG`.
+- `tools/p8screens.py <THAW install> <outdir> [p8=thaw ...]` writes `loadscrn_z_sc` <- THAW
+  `hollywood` (the slot Hollywood is in), `loadscrn_generic` <- `generic`, and both boot TGAs <-
+  THAW's title (`x`), at their archive paths; each is patched in with `hed.py replace ... --sectors`.
+  `ICON0.PNG`/`PIC1.PNG` are copied from the Remix build's THAW icons.
+- PPSSPP: THAW's title shows at boot (under P8's yellow wipe) and the Hollywood screen while z_sc
+  loads, full screen; no memory faults. The test copy's `ppsspp.log` accumulates across runs; count
+  faults only after the last "Booted" line.
+
+### THAW intro movies on Project 8
+
+- Retail P8 keeps movies as loose disc files, `PSP_GAME/USRDIR/movies/<dir>/<name>.pmf` (155 in
+  v1.00); the Project Mod ships none. On PSP, `startup_loading_screen` (misc/loading_screens.qb)
+  plays `start\atvilogo`, `start\p44`, `start\shaba`, `start\NS_logo`, `start\g_intro`; a missing
+  file is skipped (sceIoOpen fails, the game carries on).
+- But neither retail nor the mod ever runs that script: the function at module 0x1db910 runs
+  `0x36932fca` and `startup_loading_screen` once, and returns first when FUN_000927fc is non-zero,
+  which it is on every call (breakpoint in PPSSPP: v0 = 1, four calls in the first second). So
+  P8 PSP never shows an intro, even on the retail disc. `tools/p8eboot.py` nops that branch
+  (0x1db920, bnez -> nop); it checks the original word first. The mod's SYSDIR has the same PRX
+  as both EBOOT.BIN and BOOT.BIN; both are patched. Original: `work/p8mod/EBOOT.mod.orig`.
+- The mod's executable differs from retail's unencrypted BOOT.BIN only in a few strings (title,
+  version); no code changes.
+- P8's movies are PSMF0014 (Remix's are 0012); the header layout is otherwise the same, so
+  `pmfmux.py --template <retail start\atvilogo.pmf>` gives P8's header. THAW's PC videos are 640x480
+  holding a 16:9 picture at 640:360:0:60, which pmfmux used to fit whole (bars on all four sides,
+  also in the Remix build); `--crop 640:360:0:60` fills the screen.
+- Installed in `work/p8mod/tree/PSP_GAME/USRDIR/movies/start/` (built in `work/p8mod/movies/start`):
+  `atvilogo` <- ATVI.bik, `ns_logo` <- intro.bik first 11.5 s, `g_intro` <- intro.bik from 11.5 s;
+  p44 and shaba left out. PPSSPP: Activision, Neversoft, THAW intro, then the language menu, main
+  menu and Hollywood; no memory faults. P8's yellow menu wipe draws over the first second of the
+  Activision movie. Sound unconfirmed (the test copy is muted); `mkumd.py` must carry the new
+  `movies` directory when the ISO is built.
+
+### Project Mod vs vanilla Project 8 (which base for the story port)
+
+- The mod is built on vanilla v1.00 (ULUS-10197): its executable is v1.00's unencrypted BOOT.BIN with
+  37 bytes of strings changed. v2.03 is a different build (3.3 MB of the executable differs).
+- datap (by content hash, `work/p8vanilla/diff_*.txt`): of vanilla's 7,036 entries the mod keeps
+  2,321, changes 77, removes 4,638 and adds 4,425. Music is replaced (138 tracks out, 53 in);
+  streams are replaced wholesale (4,550 out; in: THPS/THUG/THUG2/Remix/THAW level sounds, 582
+  voices). Removed: 111 mission zones (career goals), 804 animsaves (career cameras), 955 textures,
+  skater models; localized globals (_f/_g/_i/_s, _net). Added: Remix/THUG2 zones, ped and cutscene
+  models, themes, `global_thpm`.
+- qb.pak: 373 script files in vanilla, 297 in the mod; 150 same, 139 changed, 84 removed, 8 added
+  (`scripts\thpm\ih_*`, levelselect, bike_sfx). The story machinery is what was cut:
+  - emptied: igc_player and igc_utils (in-game cutscenes, 15 KB/9 KB -> 28 bytes), chapter_info
+    (20 KB -> 360), cas_stores, ui_shop_specials, mainmenu_strings, global_sfx_dat_psp,
+    shaba_classic_tiers, zone_sizes_psp and pak_sizes_psp;
+  - removed: goal_descriptions, goal_cross_zone_scripts, goal_info, view_goals_menu,
+    ui_view_missions, zone_transport, cutscene_subtitles, movie_subtitles, igc_templates,
+    cutscenemenu, pedaievents (81 KB), propedaievents, sk6ped_uniquestatelogic, shaba_goal_data,
+    game_rewards, level_strings, the per-zone *_scripts_text;
+  - heavily cut: cutscene (13 KB -> 4.6), goal_scores, goal_piece_goals, stats, cheats,
+    shaba_goalutils (84 -> 47 KB), skater_profile.
+  - grown (the mod's own features): gamemenu_options (THPM options), gamemenu_levelselect,
+    cas_parts (7 KB -> 429 KB), skater_vehicle, airtricks, walking_control, physics (rewritten).
+- Vanilla's zone_sizes_psp / pak_sizes_psp hold a Size per zone and pak (largest zone ~1.5 MB,
+  plus a total of 2,211,008); the mod empties both. A new zone on vanilla needs an entry there (or
+  the tables emptied as the mod does).
+- Conclusion: the mod is a level pack on P8's engine with the career/story systems stripped; the
+  THAW story port needs exactly those systems (cutscenes, chapters, view goals, ped AI, zone
+  transport, cross-zone goals). Vanilla v1.00 is the base; the mod's THPM physics and THAW HUD theme
+  can be brought over as data if wanted.
+
+### Switching to vanilla P8 v1.00: first findings (Hollywood does not load yet)
+
+- `work/p8v/tree` is the unpacked v1.00 disc; `work/p8v/build.py` rebuilds it from pristine copies
+  (datap, BOOT/EBOOT): `p8eboot.py` intro patch (the unencrypted BOOT.BIN serves as EBOOT.BIN too),
+  the Houses zone memory budget, and the zone files. Vanilla with only the executable patch boots and
+  loads Suburbs (Free Skate and New Career) in strict mode.
+- Vanilla still carries THAW's level definitions and loaders: `Level_Z_HO` (Z_HO_Setup/Z_HO_Goals,
+  ho_level_map, map_offset (-265, -1395), scale 2.4), `load_z_ho`, `load_Z_BH`, `load_Z_DT`, ...;
+  `chapter_info` still names THAW story cutscenes (HO_2.cut, HO_3.cut, HO_LevelEvent_Dino.cut, BH_4,
+  SR_5, ...); the executable compares a script parameter against z_ho (module 0x232b4c, a zone flag).
+  Leftover THAW loading screens (`images\loadscrn_hollywood.img.psp`, ...) are in the archive.
+- Pak entry keys: pak key = qbkey(entry path less .psp) in shipped paks; the Project Mod's own paks
+  use the path with .psp and give unnamed entries qbkey('worlds\worldzones\<z>\<z>') as name key.
+  `p8zone.py --template <zone>` builds a zone from another zone's pak and maps all those forms
+  (`retarget`); `--strip` leaves out the template's prop models/anims/particles.
+- `hed.py add` appends a new archive entry (the index is unsorted, ends 0xFFFFFFFF).
+- `p8qb.py` edits the script pack in place: `setkey` (a key inside an LZSS-packed script, checked by
+  unpacking), `setdata` (keys, ints, inline strings in data), `setfield` (one field of a struct).
+- Native z_ho: CreateZoneMap needs the zone in `SkateZones` (zone_links.qb; a missing zone reads a
+  null array: module 0x1878cc from 0x186768). Renaming Houses' SkateZones entry to Z_HO (with or
+  without zone_sizes entries for z_ho/z_hoped) crashes one second into boot (heap setup under the
+  .qb OnLoad path, module 0x18e7ec -> 0x13ed0); not solved.
+- Hollywood in Houses' slot (zone files named z_houses, Level_Z_Houses unchanged) crashes when the
+  level loads, in Free Skate and in a new career alike:
+  - on Houses' own pak: scene setup gets a null object (module 0xae674, from the zone loader 0x6cbe0
+    via 0x62e74); stripping Houses' props does not change it;
+  - on the mod's School pak (retargeted): a null field (+0x10) of the scene's geometry object
+    (module 0x18df40);
+  - with is_streaming_level 0: AddScene/LoadCollision get a null scene (module 0x76f54), since the
+    non-streaming path loads scenes from pre files.
+- The Project Mod rewrote `load_level` (levels.qb 44 KB -> 29 KB): levels default to streaming, the
+  Change_Sky block is gone, the scene pre-file loads and level-load movies are removed, path memory
+  differs. That is probably what lets converted (Remix-format) levels load in the mod, and what
+  vanilla lacks.
