@@ -996,3 +996,7 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   stack, and find which setup P8's tab-UI save path calls first.
 - A breakpoint condition on entry 0 (`[0x08b660d0] == 0`) does not catch it, so the slot byte is
   not 0 when it crashes; read 0x08b660d9 first, then break on that entry.
+- Read at the pause menu: `0x08b660d0` = [0x08dc2b90, 0, ...], slot byte `0x08b660d9` = 0. Entry 0 is
+  set and entry 1 is empty, so the save path switches the byte to 1 (another context, e.g. a second
+  device or player) before it crashes. Next: find what writes 0x08b660d9 (memory breakpoint) on
+  Save Game, and what P8's own save path sets up for entry 1.
