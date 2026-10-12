@@ -289,6 +289,50 @@ def copyfield(pakp, pabp, fname, dst_struct, dst_field, src_struct, src_field):
           f'(in its string data, {room} -> {12 if t == 5 else 16} bytes; file moved to the end of the pab)')
 
 
+def addfield(pakp, pabp, fname, struct_name, after, field, value):
+    """A new string field (value str:<text>) in a top-level struct, right after another field: a
+    struct's fields are laid out record by record, each followed by its data, and the game's loader
+    reads them in that order, so the record and its text go in just after <after>'s data (the rest
+    of the file moved by resize) and the field links are redone. The file moves to the end of the
+    .pab."""
+    sys.path.insert(0, os.path.dirname(__file__))
+    from p8zone import top_items
+    if not value.startswith('str:'):
+        raise SystemExit('only str:<text> values')
+    p, b = bytearray(open(pakp, 'rb').read()), bytearray(open(pabp, 'rb').read())
+    ents, _ = pak.read_entries(bytes(p))
+    e = next(e for e in ents if e['name'].lower().endswith(fname.lower()))
+    start = e['offset'] - len(p)
+    d = bytes(b[start:start + e['size']])
+    u = lambda o: struct.unpack_from('<I', d, o)[0]  # noqa: E731
+    f, k = u(top_items(d)[key(struct_name)][1] + 4), key(after)
+    while f and u(f + 4) != k:
+        f = u(f + 12)
+    if not f:
+        raise SystemExit(f'{after} not in {struct_name}')
+    tmpl = f
+    while tmpl and d[tmpl + 1] >> 1 != 3:  # a string field's type word to copy
+        tmpl = u(tmpl + 12)
+    if not tmpl:
+        raise SystemExit(f'{struct_name} has no string field to copy the type word from')
+    at = u(f + 12)  # the next record: the new one goes there
+    if not at:
+        raise SystemExit(f'{after} is the last field')
+    text = value[4:].encode('latin-1') + bytes(1)
+    text += bytes(-len(text) % 4)
+    rec = bytearray(d[tmpl:tmpl + 4]) + struct.pack('<III', key(field), at + 16, 0) + text
+    d = bytearray(resize(d, at, 0, bytes(rec)))
+    struct.pack_into('<I', d, f + 12, at)  # after -> new (resize moved it past the insert)
+    struct.pack_into('<I', d, at + 12, at + len(rec))  # new -> the old next, now moved
+    b += bytes(-len(b) % 16)
+    pos = len(p) + len(b)
+    b += d
+    struct.pack_into('<II', p, e['entry_pos'] + 4, pos - e['entry_pos'], len(d))
+    open(pakp, 'wb').write(p)
+    open(pabp, 'wb').write(b)
+    print(f'{e["name"]} {struct_name}: new field {field} = {value[4:]!r} after {after}')
+
+
 def rekey(pakp, pabp, fname, script, old, new):
     """Every occurrence of one checksum in one script swapped for another, packed or not: the body
     is unpacked, edited, and stored unpacked (swap_script relocates the rest of the file, which then
@@ -355,6 +399,8 @@ def compact(pakp, pabp):
 
 
 def main():
+    if sys.argv[1] == 'addfield':
+        return addfield(*sys.argv[2:9])
     if sys.argv[1] == 'compact':
         return compact(*sys.argv[2:4])
     if sys.argv[1] == 'rekey':

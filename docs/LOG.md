@@ -941,3 +941,12 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   whose parts this zone has: Ped_HippieF01 and Ped_DVGuy (Houses' own). ped_Skater_02 crashed
   (module 0x8b25fc, parts not loaded). PPSSPP: the caveman teacher stands by the skater at the
   goal's restart node (P8's DV guy). Real THAW ped models are still to do.
+
+### Hollywood sky
+
+- A level struct's fields are laid out record by record, each followed by its data (strings inline
+  after their record), and the loader reads them in that order. `p8qb addfield` inserts a new string
+  field (record + text) after a given field with `resize`, then relinks. The Houses slot gets
+  `sky = "Default_sky"` after `level` (THAW's Level_Z_HO names TestLevel_Sky, which load_level turns
+  into default_sky; P8 has skies\default_sky). PPSSPP: Free Skate and Story show a daytime sky with
+  clouds where it was black; no faults.
