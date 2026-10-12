@@ -918,3 +918,18 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   (0x1523a6fe), which makes P8 tab-UI items (0x59486bf2) inside the label menu; moving past them
   morphs a missing element (DoScreenElementMorph, module 0x24074). Not called any more (all builds).
 - `p8goals.py rekeynth` swaps one occurrence of a key in a script (not used by the build now).
+
+### THAW story is the default build; Free Skate and Classic fixed
+
+- `work/p8v/build.py` now builds THAW's story by default (`P8V_NOGOALS=1` for Houses' zone scripts);
+  it runs p8zone itself for the THAW-scripted zone (`zone_thaws`).
+- Free Skate crashed in its level select (CreateScreenElement, module 0x82cb0): the level select
+  uses sprite 0x77b96927, the global.pak slot taken over for `ho_level_map`. `p8map.py` now adds
+  ho_level_map as a new global.pak entry (one 0x20-byte entry before the end marker, every other
+  data offset +0x20, data appended to the .pab) and leaves 0x77b96927 alone. THAW's
+  launch_level_select_menu also loaded its pak into the UnloadableAnim heap (`heap` key renamed).
+  Free Skate: level select (the Houses slot is "SUBURBS"), Hollywood loads, pause works.
+- Classic: the first start asks for initials on THAW's keyboard, which takes no input on P8;
+  `gamemode_options_menu_exit` compares the initials with the default (0x3bfd8eb7), renamed so it
+  never matches. Classic: single/co-op, skater select, Play Level, P8's classic level select,
+  Classic Goals difficulty, the run starts.
