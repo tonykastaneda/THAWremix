@@ -1069,3 +1069,20 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
 - PPSSPP: story save prompt Yes -> save list -> Save completed -> back to skating, the story goes on
   ("Learn from the Hollywood skaters"); pause menu Save Game in the story, the same; Free Skate save;
   Continue Story Mode loads the save into Hollywood with its progress ($120, goal stars, objective).
+
+### Hollywood level under Houses' size
+
+- `thaw2psp.py build --texel <inches>`: each texture is shrunk (power of two, down to 32) while one
+  texel stays at most that many world inches across. The world size of one texture repeat is the
+  square root of (world area / UV area) summed over every triangle using it.
+- Hollywood, `--texel 4 --tess 800`: .psp_level 3,890,688 -> 2,813,002 bytes (Houses: 2.85 MB),
+  textures 1,436,416 -> 893,952 bytes; .col unchanged. Alone, `--texel 3/4/6` give 3.47/3.35/3.20 MB
+  and `--tess 800` 3.36 MB; `--tess 0` (no splitting) 3.25 MB but long triangles drop out.
+- PPSSPP, same route from story start (5 shots each, work/shots/red_cmp_NN.png side by side):
+  textures and signs look the same; TopDown free 422,288 -> 1,502,000 bytes at the end of the route.
+- Now the default: work/p8mod/ho/z_sc.psp_level (the old one is z_sc.full.psp_level).
+  `work/p8v/build.py` takes `P8V_LEVEL=<.psp_level>` to try another.
+- The test runs broke for a while: PPSSPP's log had reached 43 GB (it appends on every boot); reading
+  it whole used up system memory and restarted herdr under SSH (session 0, where D3D11 fails).
+  `ppsspp_ws.start` now keeps one log per boot and launches through the scheduled task
+  "THX PPSSPP test" (desktop session) when it runs in session 0.

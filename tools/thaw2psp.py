@@ -1,6 +1,6 @@
 """Convert a THAW (PC) zone into THUG2 Remix (PSP) level files.
 
-  thaw2psp.py build <THAW install> <zone> <outdir> <name> --at x y z [--tex 64] [--tess 400]
+  thaw2psp.py build <THAW install> <zone> <outdir> <name> --at x y z [--tex 64] [--texel 0] [--tess 400]
   thaw2psp.py sky <THAW install> <sky> <out.psp_level> [max texture side]
 
 Writes <name>.psp_level (render geometry and textures) and <name>.col.ps2 (collision). The zone
@@ -95,12 +95,12 @@ class TexBlock:
         self.data += bytes(-len(self.data) % 16)
         return off
 
-    def add(self, key, rgba):
+    def add(self, key, rgba, max_side=None):
         if key in self.entries:
             return self.entries[key]
         h, w = rgba.shape[:2]
         tw, th = pow2_floor(w), pow2_floor(h)
-        scale = min(1.0, self.max_side / max(tw, th))
+        scale = min(1.0, (max_side or self.max_side) / max(tw, th))
         tw, th = max(8, int(tw * scale)), max(8, int(th * scale))
         img = np.array(Image.fromarray(rgba, 'RGBA').resize((tw, th), Image.Resampling.BOX))
         pal, index = quantize16(img)
@@ -265,8 +265,34 @@ def split_strip(attr, s, max_edge):
         k = j
 
 
-def build_level(meshes, materials, textures, delta, max_side, tess_len=400, log=print, offset=None, hidden=()):
+def texture_sides(meshes, materials, max_side, texel):
+    """Per texture checksum, the longest side that keeps texels at most `texel` world inches across:
+    the world size of one repeat (sqrt of world area over UV area, summed over every triangle using
+    it) / texel, rounded up to a power of two, between 32 and max_side."""
+    aw, au = {}, {}
+    for m in meshes:
+        rec = materials.get(m.material)
+        if not rec:
+            continue
+        t = struct.unpack_from('<I', rec, 0x40)[0]
+        for s in m.strips:
+            a, b, c = s[:-2], s[1:-1], s[2:]
+            P, U = m.pos, m.uv
+            aw[t] = aw.get(t, 0) + 0.5 * np.linalg.norm(np.cross(P[b] - P[a], P[c] - P[a]), axis=1).sum()
+            d1, d2 = U[b] - U[a], U[c] - U[a]
+            au[t] = au.get(t, 0) + 0.5 * np.abs(d1[:, 0] * d2[:, 1] - d1[:, 1] * d2[:, 0]).sum()
+    sides = {}
+    for t in aw:
+        if au[t] > 0:
+            want = np.sqrt(aw[t] / au[t]) / texel
+            sides[t] = int(min(max_side, max(32, 2 ** int(np.ceil(np.log2(max(want, 1)))))))
+    return sides
+
+
+def build_level(meshes, materials, textures, delta, max_side, tess_len=400, log=print, offset=None, hidden=(),
+                texel=0):
     tb = TexBlock(max_side)
+    sides = texture_sides(meshes, materials, max_side, texel) if texel else {}
     lists = [[GE_RET]]  # word 0: never selected explicitly
     mat_word = {}
     mat_info = {}
@@ -277,7 +303,7 @@ def build_level(meshes, materials, textures, delta, max_side, tess_len=400, log=
         rec = materials.get(m.material)
         tcks = struct.unpack_from('<I', rec, 0x40)[0] if rec else 0
         if tcks in textures:
-            tex = tb.add(tcks, textures[tcks][0])
+            tex = tb.add(tcks, textures[tcks][0], sides.get(tcks))
         else:
             tex = tb.add('white', white_texture())
         mat_info[m.material] = classify(rec, tex) if rec else (0, 'opaque', 1.0, (False, False))
@@ -630,6 +656,8 @@ def main():
     ap.add_argument('name')
     ap.add_argument('--at', type=float, nargs=3, required=True)
     ap.add_argument('--tex', type=int, default=64)
+    ap.add_argument('--texel', type=float, default=0,
+                    help='shrink each texture (down to 32) while its texels stay at most this many inches across')
     ap.add_argument('--tess', type=float, default=400, help='longest triangle edge in inches near the playable area')
     ap.add_argument('--max-radius', type=float, default=0, help='drop meshes with a larger bounding radius')
     ap.add_argument('--no-props', action='store_true', help='leave out GameObject props')
@@ -658,7 +686,7 @@ def main():
         textures = {**ptex, **textures}
         print(f'props: {len(pm)} meshes, {len(prop_cols)} collision objects')
     os.makedirs(a.outdir, exist_ok=True)
-    lvl = build_level(meshes, materials, textures, delta, a.tex, a.tess, hidden=hidden)
+    lvl = build_level(meshes, materials, textures, delta, a.tex, a.tess, hidden=hidden, texel=a.texel)
     open(os.path.join(a.outdir, f'{a.name}.psp_level'), 'wb').write(lvl)
     print(f'{a.name}.psp_level {len(lvl)} bytes')
 

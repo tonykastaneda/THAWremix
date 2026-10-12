@@ -112,6 +112,9 @@ Same build, same button sequence, `p8heaps.py` at each point, saved as a table i
   `thaw2psp.py`: textures (32x32 for small or distant surfaces, merge duplicate and near-duplicate
   textures, fewer mip levels), vertices (a longer `--tess`, fewer split strips, drop geometry never
   seen from the playable area), fewer materials. Check each change on screen in the test copy.
+  Done (2026-10-12): `--texel 4 --tess 800` makes it 2.81 MB (textures 1.44 -> 0.89 MB, collision
+  unchanged); 1.08 MB more TopDown free in Hollywood (422 KB -> 1.50 MB), no visible loss in the
+  test copy. Use these settings for every THAW level.
 - P8's own resident content that THAW replaces: list what is in qb.pab, the global paks and
   PedParts for P8's career and levels only, and what removing it frees.
 - COIM heap: what uses it in P8 (peds/objects streaming?), whether Hollywood ever fills it during
