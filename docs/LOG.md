@@ -1000,3 +1000,8 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   set and entry 1 is empty, so the save path switches the byte to 1 (another context, e.g. a second
   device or player) before it crashes. Next: find what writes 0x08b660d9 (memory breakpoint) on
   Save Game, and what P8's own save path sets up for entry 1.
+- `DAT_003620d0` is a context stack: 0x33acd0 pushes (index byte +1), 0x33ace4 pops, 0x32e07c
+  stores an entry, 0x32dbe0/0x32e128 read the current one. Saving pushes a context whose entry was
+  never created (entry 1 empty), so 0x334b00 reads a null. The pushes come from 0x1c36b0,
+  0x1c37a0 and 0x1c39c8 (save code). Next: see which of those runs on Save Game and what P8's own
+  path creates first (likely a save/memcard heap set up by its tab-UI flow).
