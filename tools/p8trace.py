@@ -1,6 +1,7 @@
 """Trace Project 8's script calls on the hidden PPSSPP test copy.
 
   p8trace.py <tree or iso> "<steps>" [seconds] [--funcs Printf,LoadPak,...] [--out trace.txt]
+             [--arm-after <ms>]  (breakpoints set only after that long: for functions boot also runs)
 
 Retail P8 compiles script printf to a stub (the Printf CFunc returns 1), but a breakpoint on any
 CFunc gets its parameter struct in a0, so the scripts' own messages and calls can be read from
@@ -51,6 +52,11 @@ def main():
         i = args.index('--funcs')
         funcs = args[i + 1].split(',')
         del args[i:i + 2]
+    arm_after = 0
+    if '--arm-after' in args:
+        i = args.index('--arm-after')
+        arm_after = int(args[i + 1]) / 1000
+        del args[i:i + 2]
     if '--out' in args:
         i = args.index('--out')
         out = open(args[i + 1], 'w')
@@ -73,8 +79,15 @@ def main():
     p.start(tree)
     ws = p.WS()
     time.sleep(0.2)
-    for a in bps:
-        ws.call({'event': 'cpu.breakpoint.add', 'address': a, 'enabled': True})
+    armed = [False]
+    t_arm = time.time() + arm_after
+
+    def arm():
+        if not armed[0] and time.time() >= t_arm:
+            for a in bps:
+                ws.call({'event': 'cpu.breakpoint.add', 'address': a, 'enabled': True})
+            armed[0] = True
+    arm()
 
     def read(a, n):
         return base64.b64decode(ws.call({'event': 'memory.read', 'address': a, 'size': n})['base64'])
@@ -105,6 +118,7 @@ def main():
         return ' '.join(out_)
 
     def service():
+        arm()
         if not ws.call({'event': 'cpu.status'})['stepping']:
             return True
         r = ws.call({'event': 'cpu.getAllRegs'})['categories'][0]
