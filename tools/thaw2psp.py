@@ -289,6 +289,70 @@ def texture_sides(meshes, materials, max_side, texel):
     return sides
 
 
+def lift_decals(meshes, materials, textures, lift, log=print):
+    """THAW layers decals (window and shadow decals, road reflections, stains) on surfaces at the same
+    depth and draws them with a depth bias; the PSP has none, so they fight with the surface under
+    them. Each triangle of a decal mesh (blended material, or an alpha-tested cutout) that lies in the
+    plane of an overlapping triangle of an opaque mesh moves `lift` inches along its own normal."""
+    def decal(m):
+        rec = materials.get(m.material)
+        if not rec:
+            return False
+        if rec[0x90] != 0:
+            return True
+        t = textures.get(struct.unpack_from('<I', rec, 0x40)[0])
+        return t is not None and int(t[0][..., 3].min()) < 128
+    kind = [decal(m) for m in meshes]
+    cell = 128.0
+    grid = {}  # opaque triangles by xz cell: (normal, plane d, bbox lo, bbox hi)
+    for mi, m in enumerate(meshes):
+        if kind[mi]:
+            continue
+        P = m.pos
+        for st in m.strips:
+            for a, b, c in zip(st[:-2], st[1:-1], st[2:]):
+                if a == b or b == c or a == c:
+                    continue
+                t = P[[a, b, c]]
+                nrm = np.cross(t[1] - t[0], t[2] - t[0])
+                ln = np.linalg.norm(nrm)
+                if ln < 1e-3:
+                    continue
+                nrm = nrm / ln
+                lo, hi = t.min(0), t.max(0)
+                rec = (nrm, float(nrm @ t[0]), lo, hi)
+                for gx in range(int(lo[0] // cell), int(hi[0] // cell) + 1):
+                    for gz in range(int(lo[2] // cell), int(hi[2] // cell) + 1):
+                        grid.setdefault((gx, gz), []).append(rec)
+    moved_meshes = moved = 0
+    for mi, m in enumerate(meshes):
+        if not kind[mi]:
+            continue
+        P = m.pos
+        shift = np.zeros_like(P)
+        for st in m.strips:
+            for a, b, c in zip(st[:-2], st[1:-1], st[2:]):
+                if a == b or b == c or a == c:
+                    continue
+                t = P[[a, b, c]]
+                nrm = np.cross(t[1] - t[0], t[2] - t[0])
+                ln = np.linalg.norm(nrm)
+                if ln < 1e-3:
+                    continue
+                nrm = nrm / ln
+                ctr, lo, hi = t.mean(0), t.min(0), t.max(0)
+                for on, od, olo, ohi in grid.get((int(ctr[0] // cell), int(ctr[2] // cell)), ()):
+                    if abs(on @ nrm) > 0.995 and abs(on @ ctr - od) < 1.0 and (lo <= ohi + 0.5).all() and (hi >= olo - 0.5).all():
+                        shift[[a, b, c]] = nrm * lift
+                        break
+        hit = np.abs(shift).sum(1) > 0
+        if hit.any():
+            P[hit] += shift[hit]
+            moved_meshes += 1
+            moved += int(hit.sum())
+    log(f'decals lifted {lift} in: {moved} vertices in {moved_meshes} meshes')
+
+
 def build_level(meshes, materials, textures, delta, max_side, tess_len=400, log=print, offset=None, hidden=(),
                 texel=0):
     tb = TexBlock(max_side)
@@ -659,6 +723,7 @@ def main():
     ap.add_argument('--texel', type=float, default=0,
                     help='shrink each texture (down to 32) while its texels stay at most this many inches across')
     ap.add_argument('--tess', type=float, default=400, help='longest triangle edge in inches near the playable area')
+    ap.add_argument('--decal-lift', type=float, default=0, help='inches decals move off the surface under them')
     ap.add_argument('--max-radius', type=float, default=0, help='drop meshes with a larger bounding radius')
     ap.add_argument('--no-props', action='store_true', help='leave out GameObject props')
     ap.add_argument('--col-base', help='also write <name>.props.col: this collision file (THAW PS2, for Project 8) '
@@ -686,6 +751,8 @@ def main():
         textures = {**ptex, **textures}
         print(f'props: {len(pm)} meshes, {len(prop_cols)} collision objects')
     os.makedirs(a.outdir, exist_ok=True)
+    if a.decal_lift:
+        lift_decals(meshes, materials, textures, a.decal_lift)
     lvl = build_level(meshes, materials, textures, delta, a.tex, a.tess, hidden=hidden, texel=a.texel)
     open(os.path.join(a.outdir, f'{a.name}.psp_level'), 'wb').write(lvl)
     print(f'{a.name}.psp_level {len(lvl)} bytes')

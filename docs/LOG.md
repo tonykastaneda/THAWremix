@@ -1195,3 +1195,11 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   from dark boarded walls to the open roof with the dinosaur's red foot beside the skater.
 - Cost: TopDown free at the end of the standard route 1,502,000 -> 1,280,992; COIM 230 KB used there
   (flag-gated nodes, e.g. NODEFLAG_PERMANENT_PEDS, now created). Story start and route unchanged.
+- **Floor z-fighting: THAW's layered decals.** THAW lays decals in the plane of the surface under
+  them (window and shadow decals, road reflections, stickers; e.g. Kodak_shad06 on kodak_stairs,
+  road_reflection04 on HO_Ground_New_04) and draws them with a depth bias; the PSP has none.
+  `thaw2psp.py build --decal-lift <in>` (`lift_decals`): every triangle of a decal mesh (blended
+  material, or a texture with alpha) coplanar with an overlapping opaque triangle moves that far
+  along its own normal. Hollywood at 1.0 in: 7,067 vertices in 539 meshes; size and collision
+  unchanged. PPSSPP, story start: a red poster on the shop wall (shop_stickers) that lost to the wall
+  now shows. The default level is rebuilt with it (old one: work/p8mod/ho/z_sc.nolift.psp_level).
