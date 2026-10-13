@@ -1292,3 +1292,25 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   for DVGuy, Mindy, Barber, Boone, Murphy, BMX: 356 KB free).
 - PPSSPP: standard route, no faults; gaps12's start: Mindy in her own model beside the skater
   ("Mindy: O to talk").
+
+### THAW -> P8 PSP model converter (first working character: Mindy)
+
+- P8 PSP skins (`tools/p8skin.py`, read): magic 0xC0EDBABE; 0x40 header ([3] radius, [5]/[6] texture
+  block, [8]/[9] vertices, [11]/[12] display list, [14] highest bone + 1), name at 0x40 ('`' + file
+  name), 16-byte records (1 material: list offset, material checksum, 0x808080; 4 hook: BASE/RET
+  patched at run time, keyed by the THAW texture checksum; 2 draw: list offset, vertex offset),
+  CLUT texture block, display list (per material a state block ending in the next VTYPE + RET; per
+  draw BASE, VTYPE, BONE NUM 0, CALL 0x40 * bone per palette slot (<= 8), PRIM 3/4 with FFACE,
+  0xff000000), GE hardware-skinning vertices (u8 weights summing to 0xf8 for every palette bone, s16
+  UV raw/256-128, 4444 colour, s8 normal, s16 position in 1/16 inch).
+- THAW PC skins (.skin.wpc, same scene container as levels; mesh +0x26 = weight count): 40-byte
+  vertex: position 3 floats, weights 11/11/10-bit signed-normalized, bone indices 4 x u16 (bone * 3),
+  normal 11/11/10 signed-normalized, BGRA colour, UV floats; strips. Same skeleton (thps7_human):
+  P8 bone = THAW index / 3; P8 position = 16 * (x, -z, y) (point-set match against P8's own Mindy:
+  median 0.87 in on a subsample; extents match within half an inch).
+- `tools/thaw2p8skin.py`: THAW skin -> P8 skin (triangle lists, palettes of <= 8 bones, textures
+  via thaw2psp.TexBlock CLUT4 + mips). THAW's ped_mindy_full: 11 meshes -> 38 draws, 142 KB (P8's own
+  89 KB: strips would close the gap). `p8pedpak.py --file <mesh path>=<skin>` puts a converted model in
+  the ped pak; `work/p8v/build.py` converts and uses it (P8V_P8MODELS=1 keeps P8's).
+- PPSSPP (gaps12 start): THAW's Mindy stands and animates in Hollywood, same pose and size as P8's,
+  with THAW's look (the red streak in her hair, the brighter skirt). Ped pak 499,344 bytes.

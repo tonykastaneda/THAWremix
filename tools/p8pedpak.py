@@ -2,6 +2,7 @@
 
   p8pedpak.py <qb.pak.psp> <qb.pab.psp> <datap.hed> <datap.wad> <template ped pak> <out> <profile> ...
              [--also <datap.hed> <datap.wad>]   (another archive to take parts from: Project Mod's)
+             [--file <mesh path>=<.skin.psp>]  (a converted model in place of that part, e.g. THAW's)
 
 P8 loads a level's ped pak into the PedParts heap at level load; a ped can only be built from parts in
 it (a profile whose parts are missing crashes ped creation, 0x088b2670). Each part is two entries:
@@ -60,7 +61,7 @@ def part_meshes(pakp, pabp, profiles):
     return out
 
 
-def build(pakp, pabp, hedp, wadp, template, out, profiles, also=()):
+def build(pakp, pabp, hedp, wadp, template, out, profiles, also=(), replace=None):
     B = chr(92)
     want = part_meshes(pakp, pabp, profiles)
     tmpl, tblob = open(template, 'rb').read(), None
@@ -88,6 +89,9 @@ def build(pakp, pabp, hedp, wadp, template, out, profiles, also=()):
             if any(e[1] == ks for e in entries):
                 continue
             skin, stex = found.get(ks), found.get(kt)
+            for path, f in (replace or {}).items():
+                if pak.qbkey(path) == ks:
+                    skin = open(f, 'rb').read()
             if skin is None:
                 path = B + m.replace('/', B).lower() + '.psp'
                 if path in loose:
@@ -142,4 +146,10 @@ if __name__ == '__main__':
         i = args.index('--also')
         also.append((args[i + 1], args[i + 2]))
         del args[i:i + 3]
-    build(*args[:6], args[6:], also)
+    files = {}
+    while '--file' in args:
+        i = args.index('--file')
+        k, v = args[i + 1].split('=', 1)
+        files[k] = v
+        del args[i:i + 2]
+    build(*args[:6], args[6:], also, files)
