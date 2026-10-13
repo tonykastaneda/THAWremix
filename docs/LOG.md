@@ -1223,3 +1223,24 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   (MISSION_NO_SPAWN Vehicle, GameObject): 14 Hollywood mission paks. p8zone.unspawn/create read a
   one-node array's node inline. Mission paks are cached in work/p8v/missions_out (delete to rebuild).
 - ppsspp_ws.start waits for the CPU to run before returning (inputs failed with "CPU not started").
+
+### Research: THUG2 Remix physics, camera and animations on P8 (no changes made)
+
+- Project Mod's "Physics: THPM" option (setting 0x5c2fa040.0xf2aed113, thpm/IH_globalvalues) only
+  points the skater's physics table global 0x6bbc7cba at 0xd61b77d4 (THPM) instead of 0xcd1ad2af (P8).
+  The two tables differ in 7 values: max speed 625-750 -> 950, max-max 1100-1300 -> 1500, vert and two
+  more caps 750-850 -> 1050, Physics_Heavy_Air_Friction 8.3e-5 -> 1e-5, Rail_Speed_Boost 115 -> 150.
+  Faster P8, not THUG2. The mod keeps P8's cameras.
+- THUG2 Remix physics (extracted/remix_data/scripts/game/skater/physics.qb, read with qb2 tokens):
+  skater_physics (37) + stat globals. 40 keys shared with P8's table, same names; differences: air
+  gravity -1350 vs -1150, ground -1000 vs -200, rail -2000 vs -860, max speed 757-900 vs 625-750,
+  jump 414-450 vs 405-425, boneless 489-525 vs 450-485, ground rotation 1.8 vs 3.6, frictions higher,
+  crouched kick 532-675 vs 425-500. P8-only: air/vert hang stats, heavy air friction, bert, wallplant
+  exit speeds, point rail boost (set to THUG2-like neutral values if ported).
+- Cameras: P8 PSP's default is its own 0xfdce80cd "standard" (behind 7.72 ft, above 3.58, FOV 80,
+  origin_offset 2.4); THUG2's Skater_Camera_Standard_Medium is behind 12, above 4.3, FOV 72. P8 also
+  has THUG2-like Standard_Medium (11.2 / 4.1) that the PSP camera cycle does not use by default.
+- Animations: P8's skater skeleton is thps7_human; THUG2's is thps5_human (55 bones; Remix also has
+  thps6_human, 50). Different skeletons and anim formats (P8 compressed q48/t48 keys): THUG2 skater
+  anims would need retargeting and re-encoding. Project Mod's airtricks.qb grew 468 -> 1356 lines
+  (trick lists) on P8's own animations.
