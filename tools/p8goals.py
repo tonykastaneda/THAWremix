@@ -240,18 +240,14 @@ def story_run(pakp, pabp, zone_pak):
     """Test build only (P8V_STORYRUN): the story plays itself. chapter_1_startup spawns a driver that
     wins whatever goal GoalManager_GetActiveGoalId names (a series' children; it misses some, e.g.
     the barber step), else takes the first goal of STORY_RUN not won: won if active, else activated
-    unless locked; a panel names it. It stops where a goal stays locked (the story's own
+    unless locked; a panel names it. After Highcombo3 the skater is put where THAW's dino IGC films
+    from, to look at the dinosaur. It stops where a goal stays locked (the story's own
     gating), which is the point: the chain, its unlocks and level events run as in play."""
     import qb2
-    # once the dino event has run: two world cameras on the dinosaur building (screenshots check its state)
-    look = []
-    tx, tz = -2646.0, 1583.0  # the dinosaur's eyes (THAW node Z_HO_NightOn_03_HO_Before_Dino01_eyes)
-    for dx, dz in ((0, 1600), (0, -1600), (1600, 0), (-1600, 0)):
-        yaw = math.atan2(dx, dz)  # look down (-sin yaw, 0, -cos yaw), toward the dinosaur
-        look += ['KillSkaterCamAnim ALL',
-                 f'PlayIGCCam {{ LockTo = world Pos = ({tx + dx:.1f}, 450.0, {tz + dz:.1f}) '
-                 f'Quat = (0.0, {math.sin(yaw / 2):.6f}, 0.0) FOV = 72.0 time = 0 play_hold }}', 'wait 5 seconds']
-    look += ['KillSkaterCamAnim ALL']
+    # once the dino event has run: the skater on THAW's spot for watching it (the IGC's "you" node, on
+    # the street facing the dinosaur), for screenshots of its state
+    look = ['ResetSkaters node_name = Z_HO_TRG_G_HIGHCOMBO_IGC_YouNode',
+            "create_panel_message id = hw_story_run text = 'story run: the dinosaur' time = 100000", 'wait 12 seconds']
     body = ['wait 10 seconds', '<hw_looked> = 0', 'while',
             'if GoalManager_HasWonGoal Name = Z_HO_Goal_Highcombo3', 'if (<hw_looked> = 0)', '<hw_looked> = 1',
             'wait 15 seconds', *look, 'endif', 'endif',
