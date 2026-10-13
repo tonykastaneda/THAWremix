@@ -1146,3 +1146,5 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   plays: the extra memory works on real hardware. Shipping note for the 2000/3000 build: ARK-4's
   extra memory set to forced (unless a PBP package or another PARAM.SFO CATEGORY gets it on Auto:
   untested).
+- PSP-3000, D: more peds visible than in C (the 4x heaps hold them on hardware too). Saving on the big
+  build is untested (in PPSSPP too); left for when the game is complete.
