@@ -337,6 +337,40 @@ def zone_script(pak_path, script, source):
     print(f'{os.path.basename(pak_path)} {script}: replaced ({len(code)} bytes)')
 
 
+def zone_append(pak_path, script, source):
+    """Compiled source (qbc syntax) added at the end of one script of a zone pak's <zone>_scripts.qb,
+    before its endscript (script: a name or 0x key, as the slot renamed some)."""
+    import qbc
+    compiled = qbc.compile_source('script hw_append' + chr(10) + source + chr(10) + 'endscript' + chr(10))
+    _, body = compiled[pak.qbkey('hw_append')]
+    lines = body[6:-1]  # less qbc's 0x23 <name> and the closing 0x24
+    ents, blob = p8zone.load_pak(pak_path)
+    zone = os.path.basename(pak_path).lower().split('.')[0]
+    i, e = next((i, e) for i, e in enumerate(ents) if (e['name'] or '').lower().endswith(chr(92) + zone + '_scripts.qb.psp'))
+    d = blob[e['offset']:e['offset'] + e['size']]
+    k = p8qb.key(script)
+    v, code = script_code(d, k)
+    assert code[-1] == 0x24, 'script does not end in endscript'
+    code = code[:-1] + lines + code[-1:]
+    d = p8qb.swap_script(d, k, d[v:v + 4] + struct.pack('<2I', len(code), len(code)) + code)
+    out = p8zone.write_pak(pak_path, {i: d})
+    open(pak_path, 'wb').write(out)
+    print(f'{os.path.basename(pak_path)} {script}: {len(lines)} bytes added')
+
+
+# THAW's PETA protesters at the dinosaur (Z_HO_ped_hippie_01, node flag DINO_BEFORE: the dino event
+# removes them). Pedestrians stay uncreated in the port (p8zone NO_SPAWN, and their CreatedAtStart sits
+# in node structs other peds share), so the zone's goals script (Houses' key 0xb58ff31f) creates these
+# three while the dino step is not won
+PROTESTERS = ('Z_HO_TRG_Ped_Protester_01', 'Z_HO_TRG_Ped_Protester_04', 'Z_HO_TRG_Ped_Protester_05')
+
+
+def protesters(zone_pak):
+    zone_append(zone_pak, '0xb58ff31f', chr(10).join(
+        ['if not GoalManager_HasWonGoal Name = Z_HO_Goal_Highcombo3'] +
+        [f'create name = {n}' for n in PROTESTERS] + ['endif']))
+
+
 SHOP_DOOR_RADIUS = 160
 
 
@@ -708,6 +742,8 @@ def main():
         igc_paks(*sys.argv[2:4])
     elif sys.argv[1] == 'zonescript':  # <zone or mission .pak.psp> <script> <qbc source, \n between lines>
         zone_script(sys.argv[2], sys.argv[3], sys.argv[4].replace(chr(92) + 'n', chr(10)))
+    elif sys.argv[1] == 'protesters':  # <zone .pak.psp>
+        protesters(sys.argv[2])
     elif sys.argv[1] == 'zonerekey':  # <zone .pak.psp> <script> <old> <new>
         zone_rekey(*sys.argv[2:6])
     elif sys.argv[1] == 'missions':

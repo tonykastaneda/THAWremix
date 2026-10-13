@@ -1448,3 +1448,18 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
 - One G screenshot 6 s after Circle showed THAW's barbershop interior with no menu; a rerun with shots
   at 1.5-14 s showed the store normally every time (likely a capture of another render pass; the same
   frame appeared once on the PSP-1000 tree). Watch for it on hardware.
+
+### PETA protesters at the dinosaur (story mission 8's protest)
+
+- THAW's protesters (Z_HO_TRG_Ped_Protester_01/04/05, profile Z_HO_ped_hippie_01: random hippie head,
+  torso and legs, node flag DINO_BEFORE so the dino event removes them) were never created: the port
+  leaves Pedestrian nodes uncreated (p8zone NO_SPAWN) and their CreatedAtStart sits in compressed node
+  structs other peds share.
+- `p8goals.py protesters` (`zone_append`: compiled lines added before a zone script's endscript) makes
+  the zone's goals script (Houses' key 0xb58ff31f) create the three while Z_HO_Goal_Highcombo3 is not won.
+- Model: P8's unused Ped_OldLady_Fullbody profile is repointed (REPOINT) at THAW's hippie torso, merged
+  with head01 and legs01 (MERGE, 66 KB); PROFILES maps Z_HO_ped_hippie_01(_roaming) to it. Ped pak
+  1,026,272 bytes; PSP-1000 PedParts 1,152 KB.
+- PPSSPP (P8V_TESTGOAL=z_ho_goal_highcombo): the protesters stand on the street below the dinosaur in
+  THAW's look (paisley tops, jeans, long blonde hair). Not checked yet: their removal at the dino event
+  (DINO_BEFORE 0 is traced, the peds' disappearance is not).
