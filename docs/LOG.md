@@ -1183,3 +1183,15 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   ollie, triangle: BS 50-50 on a rope with the balance meter, 247-point combo, the goal wins and
   "Follow my line" starts. Teleporting by writing memory was unreliable (a "position" copy was the
   velocity); starting at a goal's restart node is the dependable way to put the skater somewhere.
+- **Missing dinosaur building: THAW's node flags never existed.** P8's create_node_flags
+  (nodeflags.qb) creates only its own 4 node flags; THAW's (291 in
+  game_progress_set_initial_story_mode_nodeflags; Hollywood's nodes are gated on 30 of them:
+  DINO_BEFORE 47 nodes, DINO_AFTER 47, DT_EVENT 26, TOWERWIRES 15, ...) were never created, so
+  ChangeNodeFlag on them did nothing and every piece/rail on one stayed hidden. Also, chapter_1_startup
+  applies the story's flags (CareerFunc SetAppropriateNodeFlags) only when autolaunched.
+  `p8goals.py nodeflags` creates the 289 distinct THAW flags at boot (list read from the qbdump of
+  chapter_info); `p8goals.py storyflags` makes chapter_1_startup call SetAppropriateNodeFlags always.
+  Either alone changed nothing; both: the high-combo goal's rooftop start (beside the dinosaur) goes
+  from dark boarded walls to the open roof with the dinosaur's red foot beside the skater.
+- Cost: TopDown free at the end of the standard route 1,502,000 -> 1,280,992; COIM 230 KB used there
+  (flag-gated nodes, e.g. NODEFLAG_PERMANENT_PEDS, now created). Story start and route unchanged.

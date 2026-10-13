@@ -4,6 +4,10 @@
       P8's goal_load_pak takes THAW's prefix/suffix (see patch_goal_load_pak)
   p8goals.py igcskip <qb.pak.psp> <qb.pab.psp>
       in-game cutscenes skipped (see skip_igc)
+  p8goals.py nodeflags <qb.pak.psp> <qb.pab.psp>
+      THAW's node flags created at boot (see node_flags)
+  p8goals.py storyflags <qb.pak.psp> <qb.pab.psp>
+      the story's initial node flags applied on a menu-started story too (see story_flags)
   p8goals.py heaps <qb.pak.psp> <qb.pab.psp> <COIM> <PedParts> <AnimHeap>
       bigger ped heaps for the PSP-2000/3000 build (see heaps)
   p8goals.py missions <THAW PS2 data dir> <outdir> <empty .psp_level> <prefix> [<prefix> ...]
@@ -187,6 +191,39 @@ def heaps(pakp, pabp, coim, pedparts, anim):
     print(f'heaps: COIM {coim}, PedParts (Houses) {pedparts}, AnimHeap {anim}')
 
 
+def node_flags(pakp, pabp):
+    """P8's create_node_flags (nodeflags.qb) creates only its own 4 node flags; THAW's (291 in
+    game_progress_set_initial_story_mode_nodeflags, among them the 30 Hollywood's nodes are gated on:
+    DINO_BEFORE, TOWERWIRES, DT_EVENT, ...) never existed, so ChangeNodeFlag on them did nothing and
+    every piece and rail on one stayed hidden (the dinosaur building). They are created there too."""
+    import qb2
+    src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'work', 'p8v', 'qbdump',
+                            'scripts_game_menu_chapter_info.qb.psp.txt'), encoding='latin-1').read()
+    flags = re.findall(r'\{ (NODEFLAG_\w+) \d \}', src.split('=== game_progress_set_non_story_mode_nodeflags')[0])
+    lines = b''.join(name('CreateNodeFlag') + name(f) + bytes([NL]) for f in dict.fromkeys(flags))
+
+    def edit(code):
+        at = next(o for o, t, pl in qb2.tokens(code) if t == NAME and pl == struct.pack('<I', pak.qbkey('CreateNodeFlag')))
+        return insert_code(code, at, lines)
+    edit_script(pakp, pabp, 'nodeflags.qb.psp', 'create_node_flags', edit)
+    print(f'create_node_flags: {len(dict.fromkeys(flags))} THAW node flags created')
+
+
+def story_flags(pakp, pabp):
+    """chapter_1_startup applies the story's node flags (CareerFunc SetAppropriateNodeFlags) only
+    when the game was autolaunched; a story started from the menu never got THAW's initial Hollywood
+    flags (game_progress_set_initial_story_mode_nodeflags: DINO_BEFORE 1, TOWERWIRES 1, ...), so the
+    pieces on them stayed hidden (the dinosaur building). The call now runs first, always."""
+    import qb2
+    line = name('CareerFunc') + name('func') + bytes([EQ]) + name('SetAppropriateNodeFlags') + bytes([NL])
+
+    def edit(code):
+        at = next(o for o, t, pl in qb2.tokens(code) if t == NAME and pl == struct.pack('<I', pak.qbkey('ChangeNodeFlag')))
+        return insert_code(code, at, line)
+    edit_script(pakp, pabp, 'menu' + chr(92) + 'chapter_info.qb.psp', 'chapter_1_startup', edit)
+    print('chapter_1_startup: SetAppropriateNodeFlags always')
+
+
 def coim_around_save(pakp, pabp, coim=COIM_SIZE):
     """Saving pushes temporary script pools (20000 CComponent, 9000 CStruct, 3000 CVector, ~440 KB)
     onto the main heap, which has 422 KB free with THAW's Hollywood and its goals loaded: the last
@@ -309,6 +346,10 @@ def main():
         print(f'{f} {sc}: occurrence {nth} of {old} -> {new}')
     elif sys.argv[1] == 'savecoim':  # <qb.pak> <qb.pab> [COIM size]
         coim_around_save(*sys.argv[2:4], *map(int, sys.argv[4:5]))
+    elif sys.argv[1] == 'nodeflags':
+        node_flags(*sys.argv[2:4])
+    elif sys.argv[1] == 'storyflags':
+        story_flags(*sys.argv[2:4])
     elif sys.argv[1] == 'heaps':  # <qb.pak> <qb.pab> <COIM> <PedParts> <AnimHeap>
         heaps(*sys.argv[2:4], *map(int, sys.argv[4:7]))
     elif sys.argv[1] == 'zonerekey':  # <zone .pak.psp> <script> <old> <new>
