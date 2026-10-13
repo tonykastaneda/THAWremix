@@ -1148,3 +1148,18 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   untested).
 - PSP-3000, D: more peds visible than in C (the 4x heaps hold them on hardware too). Saving on the big
   build is untested (in PPSSPP too); left for when the game is complete.
+
+### Hollywood feature complete first; grinding (open)
+
+- Decision (2026-10-12): Hollywood is finished (story beats, goals, geometry, grinding) before any
+  other area. The user reports on hardware: grinding does not work, some geometry broken or missing,
+  floor textures fight with geometry (z-fighting), story beats and goals incomplete.
+- Grinding was only ever tested on the THX (Remix) build. On P8 the zone pak carries THAW's own
+  node array: 1,579 RailNodes, 1,420 CreatedAtStart, the rest on NODEFLAG_Z_HO_DINO_BEFORE/AFTER,
+  DT_EVENT, TOWERWIRES. Fields match P8's Houses rails (Class, Type, TerrainType TERRAIN_GRIND*,
+  Cluster, TrickObject, Links); THAW's are partly compressed nodes (shared structs).
+- Test aid: the skater's live position (PPSSPP, default build, story start) at 0x0997F190 with copies
+  at 0x0931EE40, 0x0997E8F0, 0x0997F1A0, 0x09982430, 0x09984040 (writing all of them teleports). The
+  story starts on foot (board in hand); L+R gets on the board. A drop onto Rail_Kodak133/134
+  (-1748, 175, -2478) with triangle held landed standing on the ledge top (y 142.8), not grinding:
+  inconclusive (no speed along the rail).
