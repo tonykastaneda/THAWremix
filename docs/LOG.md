@@ -1258,3 +1258,16 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   THUG2 ped sets (ped_male\barcelona, skatopia, australia, boston, ...), ~100 GameObject props
   (GameObjects\THUG, THUG2, THUG2Remix) and 578 THAW CAS textures (tex\models\skater_male_aw).
   All in P8 PSP format; usable on our build with the mod's profile/select scripts.
+
+### THUG2 Remix feel is the default (physics and cameras)
+
+- `tools/p8thug2.py` writes THUG2 Remix's values into P8's physics.qb in place: every parameter P8's
+  six skater physics tables share with Remix's skater_physics and stat globals (active table
+  0x09039fde: 23 values, e.g. air/ground/rail gravity -1150/-200/-860 -> -1350/-1000/-2000, max speed
+  625-750 -> 757-900, jump 405-425 -> 414-450, ground rotation 3.6 -> 1.8), and P8 PSP's own skater
+  cameras from Skater_Camera_Standard_* (standard 0xfdce80cd: behind 7.72 -> 12, above 3.58 -> 4.3,
+  FOV 80 -> 72, origin_offset 2.4 -> 0.2, lerps), with the balance-trick fields 0x15814c70 (1.6) and
+  0x48f0a316 ([30, 12.5, -10]) at 0. 150 values in all. `work/p8v/build.py` runs it by default;
+  P8V_P8PHYSICS=1 keeps P8's.
+- PPSSPP, story start, side by side: rolling, P8's camera sits on the skater, THUG2's is back at
+  normal distance; nose manual: P8 zooms right in, THUG2's camera stays where it was.
