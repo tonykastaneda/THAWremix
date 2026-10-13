@@ -120,9 +120,13 @@ Where the port stands, how the work is done, and what comes next. The detailed h
    Remix build did (check how Remix did it first). Mind PedParts / TopDown memory (`docs/memorybudget.md`).
 3. Verify the sponsor win (complete one stat challenge in the emulator) and the dinosaur's after state
    on screen (find where the dino is drawn, e.g. from the level geometry, then place a camera).
-4. Character select when starting a new story: right now Story -> Start New Story -> difficulty goes
-   straight into Hollywood with the current skater. Add THAW's character select (pick a skater or
-   create one) before the story starts, checking how the THUG2 Remix build handled it first.
+4. THAW's character select on a new story: in THAW, Start New Story first shows four preset skaters
+   to pick from (THAW's story select, the Z_StorySelect level), and the story starts with that one.
+   Here Story -> Start New Story -> difficulty goes straight into Hollywood with the current skater:
+   build.py rekeys story_options_change_level to Hollywood's load script because P8 has no
+   Z_StorySelect (loading THAW's z_mainmenu zone failed on it, see docs/LOG.md). Bring the four-preset
+   pick back (THAW's presets as P8 appearances, shown in P8's own front end or a ported story select),
+   checking how the THUG2 Remix build did it first.
 5. Remaining Hollywood content: graffiti-goal taggers and other ambient peds (Pedestrians are left
    uncreated), Rick Thorne bike goals (Project Mod's BMX), vehicles, cutscenes.
 6. A new hardware ISO batch once 2-5 land.
