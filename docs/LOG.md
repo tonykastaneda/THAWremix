@@ -1518,3 +1518,25 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   offers only Exit) -> right, up into the quarter pipe beside the skate shop, kickflip, land ->
   GoalManager_WinGoal z_ho_goal_gaps31, goal_success_messages, goal_unload_pak (p8trace). The same
   path runs at the real 2,000.
+
+### The dinosaur's after state, on screen (story mission 8)
+
+- THAW's dino event sets its node flags in two places P8 skips: the IGC shot script
+  (M_ZHOHIGHCOMBO3_SUCCESS_Shot2: DINO_BEFORE 0, AFTER 1, BLDG_AFTER 1) and the end script of the
+  cutscene after it (cutscenemenu.qb's HO_LevelEvent_Dino_end, `#4a` structs in the old dump, decoded by
+  the current thawqbdump: AFTER 1, HEAD 1, BLDG_AFTER 1, and the two streetlights its begin script had
+  killed created again). The port set only the shot script's three, so the fallen head (its own flag,
+  NODEFLAG_Z_HO_DINO_HEAD) never appeared. build.py's DINO_EVENT_FLAGS (the net state, HEAD 1 added)
+  go into M_ZHOHIGHCOMBO3_Success_startup.
+- Test switches (build.py): P8V_DINOAFTER=1 sets DINO_EVENT_FLAGS from the first step's start script
+  (Z_HO_ChangeYourLookWin, which runs after chapter startup has applied the story's flags; from the zone's
+  goals script they were overwritten), P8V_CAM=x,y,z,yaw holds a world camera there, P8V_CREATE=<nodes>
+  creates nodes there. `p8goals zoneappend` adds lines to a zone script (zone_append now also takes
+  qbc-compiled scripts, and no longer leaves a second endscript after the added lines).
+- Cameras: a yaw-only PlayIGCCam quat (0, sin(a/2), 0) looks along (-sin a, 0, +cos a); the old note
+  (-cos a) went unnoticed because the shop doors face +-x.
+- PPSSPP, fixed cameras, without and with the event's flags: from (-1500, 300, 1700) yaw 1.62 the red
+  dinosaur with its globe stands on the diner roof / is gone, the roof broken in; from (-1900, -100, 2400)
+  yaw 1.093 the PETA protesters line the street in front of the scaffold / the fallen head lies on the
+  street and the protesters are gone. The pieces built hidden in the .psp_level (STORY_START 'hidden')
+  do show once their flag is on: P8 is not Remix here.

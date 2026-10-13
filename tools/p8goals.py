@@ -343,15 +343,18 @@ def zone_append(pak_path, script, source):
     import qbc
     compiled = qbc.compile_source('script hw_append' + chr(10) + source + chr(10) + 'endscript' + chr(10))
     _, body = compiled[pak.qbkey('hw_append')]
-    lines = body[6:-1]  # less qbc's 0x23 <name> and the closing 0x24
+    assert body[-2:] == bytes((0x24, 0x01))
+    lines = body[6:-2]  # less qbc's 0x23 <name> and the closing endscript + newline
     ents, blob = p8zone.load_pak(pak_path)
     zone = os.path.basename(pak_path).lower().split('.')[0]
     i, e = next((i, e) for i, e in enumerate(ents) if (e['name'] or '').lower().endswith(chr(92) + zone + '_scripts.qb.psp'))
     d = blob[e['offset']:e['offset'] + e['size']]
     k = p8qb.key(script)
     v, code = script_code(d, k)
-    assert code[-1] == 0x24, 'script does not end in endscript'
-    code = code[:-1] + lines + code[-1:]
+    # the closing endscript: last byte (THAW's scripts) or before a newline (qbc-compiled ones)
+    end = len(code) - 1 if code[-1] == 0x24 else len(code) - 2
+    assert code[end] == 0x24, 'script does not end in endscript'
+    code = code[:end] + lines + code[end:]
     d = p8qb.swap_script(d, k, d[v:v + 4] + struct.pack('<2I', len(code), len(code)) + code)
     out = p8zone.write_pak(pak_path, {i: d})
     open(pak_path, 'wb').write(out)
@@ -757,6 +760,8 @@ def main():
         protesters(sys.argv[2])
     elif sys.argv[1] == 'sponsor':  # <zone .pak.psp>
         sponsor(sys.argv[2])
+    elif sys.argv[1] == 'zoneappend':  # <zone .pak.psp> <script> <qbc source, \n between lines>
+        zone_append(sys.argv[2], sys.argv[3], sys.argv[4].replace(chr(92) + 'n', chr(10)))
     elif sys.argv[1] == 'zonerekey':  # <zone .pak.psp> <script> <old> <new>
         zone_rekey(*sys.argv[2:6])
     elif sys.argv[1] == 'missions':
