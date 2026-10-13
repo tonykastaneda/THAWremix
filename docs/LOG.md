@@ -1141,3 +1141,8 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
 - PSP-3000: C (no intro) works. So the hardware crash is in the intro path (B, P8's own movies with
   the patch, still to report). work/iso/D THAW P8 big test (no intro).iso: P8V_NOINTRO + P8V_BIG with
   every non-pigeon ped on (PPSSPP as PSP-2000: reaches Hollywood).
+- PSP-3000, ARK-4: D (P8V_BIG, MEMSIZE = 1) stalls on the loading bar with ARK-4's "use extra memory"
+  on Auto (THX and C, which do not ask for it, run fine on Auto). Forced on, D loads Hollywood and
+  plays: the extra memory works on real hardware. Shipping note for the 2000/3000 build: ARK-4's
+  extra memory set to forced (unless a PBP package or another PARAM.SFO CATEGORY gets it on Auto:
+  untested).

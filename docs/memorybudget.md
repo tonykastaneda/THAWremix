@@ -97,7 +97,8 @@ Answered (2026-10-12):
   size. `GotExtraMemory` is a dev-kit check (DebugHeap fonts, model viewer), not a model check;
   Project Mod adds nothing here (its executable differs from vanilla's by 37 bytes).
 - PPSSPP: PSP-1000 20.1 MB, PSP-2000 20.1 MB, **PSP-2000 with `MEMSIZE = 1` in PARAM.SFO 53.7 MB**
-  (+33.5 MB). No executable patch needed. Real hardware (CFW) still to check.
+  (+33.5 MB). No executable patch needed. Real PSP-3000 (ARK-4): works with ARK-4's "use extra
+  memory" forced on; on Auto the ISO gets 32 MB and the big build stalls loading.
 - The ped heaps are script numbers: COIM (coim.qb global 0xcfae4518, 652,288), PedParts (per level in
   load_level; Houses 401,472), AnimHeap (load_permanent_assets, 131,072).
 - Two builds (decided): `work/p8v/build.py` with `P8V_BIG=1` is the PSP-2000/3000 one (MEMSIZE = 1,
