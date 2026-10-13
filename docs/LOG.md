@@ -1133,3 +1133,8 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   header with depth byte 0x18 and descriptor 0x20 = top-down, BGR rows, nothing after). p8screens
   `boot_tga` now writes P8's exact layout. For the PSP: work/iso/A THAW P8 normal.iso (fixed) and
   work/iso/B P8 baseline.iso (P8V_BASELINE: shipped data + the p8eboot patch only); both boot in PPSSPP.
+- PSP-3000, A: the THAW legal screen shows briefly (the boot TGA was one problem), then black and a
+  crash about 5 s later, where the intro movies start. p8eboot's boot_movies patch turns on an intro
+  path the shipped game always skips, and three of the movies are ours (pmfmux, ATRAC3plus). New:
+  `P8V_NOINTRO=1` (unpatched executable, as shipped) -> work/iso/C THAW P8 no intro.iso (PPSSPP: reaches
+  Hollywood). On the PSP: B (P8's own movies with the patch) and C tell the intro path from the rest.
