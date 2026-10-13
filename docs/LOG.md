@@ -1463,3 +1463,12 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
 - PPSSPP (P8V_TESTGOAL=z_ho_goal_highcombo): the protesters stand on the street below the dinosaur in
   THAW's look (paisley tops, jeans, long blonde hair). Not checked yet: their removal at the dino event
   (DINO_BEFORE 0 is traced, the peds' disappearance is not).
+
+### The cop-car bank drop's goal giver (gaps13) as THAW's model
+
+- Z_HO_Ped_FallingDown (body + head) -> P8's unused Ped_Welder full-body profile, repointed at THAW's
+  Ped_FallingDown_body with the head merged (61 KB). Ped pak 1,087,584 bytes (PSP-1000 PedParts 1,152 KB).
+- PPSSPP (P8V_TESTGOAL=z_ho_goal_gaps13): the goal runs, no faults. The giver himself was not seen (the
+  goal starts in gameplay, he stands elsewhere); the converted model's extents match Joey B.'s (72 in
+  tall). Hollywood's goal givers are now all THAW models except the DV guy's own goal (gap7, THAW's DV
+  guy converted already) and the graffiti-goal taggers (Ped_MexicanGraffiti, peds left unspawned).

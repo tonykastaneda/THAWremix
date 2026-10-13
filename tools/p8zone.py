@@ -135,7 +135,7 @@ PROFILES = {
     'Z_HO_Ped_Asshole': 'ped_SkaterSelect_vato', 'Z_HO_Ped_Asshole_Roaming': 'ped_SkaterSelect_vato',
     'Z_HO_ped_bum_01': 'Ped_Bum01',
     'Ped_Mindy': 'Ped_HippieF_FullBody04', 'Ped_Barber': 'Ped_HippieF_FullBody03', 'ped_boone': 'Ped_HippieF_FullBody02',
-    'Z_HO_Ped_FatConstruction': 'Ped_HippieF_FullBody01', 'Z_HO_Ped_FallingDown': 'Ped_DVGuy',
+    'Z_HO_Ped_FatConstruction': 'Ped_HippieF_FullBody01', 'Z_HO_Ped_FallingDown': 'Ped_Welder',
     'Ped_MexicanGraffiti': 'Ped_DVGuy', 'Ped_ShopOwner': 'Ped_DVGuy', 'Ped_SurPlus': 'Ped_DVGuy',
     'Z_HO_ped_hippie_01': 'Ped_OldLady_Fullbody', 'Z_HO_ped_hippie_01_roaming': 'Ped_OldLady_Fullbody'}
 # cas_ped_m mesh paths repointed (p8qb setstr): P8's ped board path is not on the disc; three full-body
@@ -148,16 +148,19 @@ REPOINT = (('models/ped_male/Ped_Skateboard.skin', 'models/peds/ped_skateboards/
            ('models/peds/Ped_Protester_FullBody/Ped_HippieF_FullBody01.skin',
             'models/peds/ped_FatConstruction/Ped_FatConstruction.skin'),
            ('models/peds/Ped_OldLady_Fullbody/Ped_OldLady_Fullbody.skin',
-            'models/ped_male/Ped_Hippies/Ped_HippieF_Torso01.skin'))
+            'models/ped_male/Ped_Hippies/Ped_HippieF_Torso01.skin'),
+           ('models/peds/Ped_Welder/Ped_Welder.skin', 'models/peds/Ped_Fallingdown/Ped_FallingDown_body.skin'))
 # THAW characters made of several parts, merged into the one model a full-body profile names
 # (thaw2p8skin --also): the dino head seller's head
 MERGE = {'models/peds/ped_fatconstruction/ped_fatconstruction.skin':
          ('models/peds/ped_fatconstruction/ped_fatconstruction_head.skin',),
          # the PETA protester (THAW picks random hippie parts; one set here)
          'models/ped_male/ped_hippies/ped_hippief_torso01.skin':
-         ('models/ped_male/ped_hippies/ped_hippief_head01.skin', 'models/ped_male/ped_hippies/ped_hippief_legs01.skin')}
+         ('models/ped_male/ped_hippies/ped_hippief_head01.skin', 'models/ped_male/ped_hippies/ped_hippief_legs01.skin'),
+         # the cop-car bank drop's goal giver (gaps13)
+         'models/peds/ped_fallingdown/ped_fallingdown_body.skin': ('models/peds/ped_fallingdown/ped_fallingdown_head.skin',)}
 # the Houses slot's ped pak: every profile the zone's and missions' peds can name after PROFILES
-PED_PAK = ('Ped_DVGuy', 'Ped_OldLady_Fullbody', 'Ped_HippieF_FullBody01', 'Ped_HippieF_FullBody02', 'Ped_HippieF_FullBody03', 'Ped_HippieF_FullBody04', 'ped_murphy',
+PED_PAK = ('Ped_DVGuy', 'Ped_OldLady_Fullbody', 'Ped_Welder', 'Ped_HippieF_FullBody01', 'Ped_HippieF_FullBody02', 'Ped_HippieF_FullBody03', 'Ped_HippieF_FullBody04', 'ped_murphy',
            'Ped_BMX', 'ped_Skater_02', 'ped_Skater_03', 'Pro_Reynolds', 'Pro_Rick_Thorne', 'Ped_Bum01',
            'ped_SkaterSelect_vato')
 
