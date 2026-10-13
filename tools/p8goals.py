@@ -311,8 +311,9 @@ def coim_around_save(pakp, pabp, coim=COIM_SIZE):
 
 
 def zone_script(pak_path, script, source):
-    """One script of a zone pak's <zone>_scripts.qb replaced by compiled source (qbc syntax, the body
-    lines only): qbc's 0x23 <name> .. 0x24 less the leading 0x23 and name, stored unpacked."""
+    """One script of a zone (or mission) pak's .qb files (<zone>_scripts.qb first) replaced by compiled
+    source (qbc syntax, the body lines only): qbc's 0x23 <name> .. 0x24 less the leading 0x23 and
+    name, stored unpacked."""
     import qbc
     compiled = qbc.compile_source('script ' + script + chr(10) + source + chr(10) + 'endscript' + chr(10))
     kind, body = compiled[pak.qbkey(script)]
@@ -320,10 +321,20 @@ def zone_script(pak_path, script, source):
     code = body[6:]
     ents, blob = p8zone.load_pak(pak_path)
     zone = os.path.basename(pak_path).lower().split('.')[0]
-    i, e = next((i, e) for i, e in enumerate(ents) if (e['name'] or '').lower().endswith(chr(92) + zone + '_scripts.qb.psp'))
-    d = blob[e['offset']:e['offset'] + e['size']]
     k = pak.qbkey(script)
-    v, _ = script_code(d, k)
+    # <zone>_scripts.qb first, then the pak's other .qb files (node scripts sit in <zone>.qb)
+    qbs = sorted((i for i, e in enumerate(ents) if (e['name'] or '').lower().endswith('.qb.psp')),
+                 key=lambda i: not ents[i]['name'].lower().endswith(chr(92) + zone + '_scripts.qb.psp'))
+    for i in qbs:
+        e = ents[i]
+        d = blob[e['offset']:e['offset'] + e['size']]
+        try:
+            v, _ = script_code(d, k)
+            break
+        except StopIteration:
+            continue
+    else:
+        raise SystemExit(f'{script}: in none of the .qb files of {pak_path}')
     d = p8qb.swap_script(d, k, d[v:v + 4] + struct.pack('<2I', len(code), len(code)) + code)
     out = p8zone.write_pak(pak_path, {i: d})  # read the pak before opening it for writing
     open(pak_path, 'wb').write(out)
@@ -476,6 +487,53 @@ SetButtonEventMappings unblock_menu_input
 GoalManager_UnpauseAllGoals
 GoalManager_WinGoal Name = (last_cas_item_id)
 change last_cas_item_id = 0'''
+    # the sponsor challenge's stats board: THAW's Ghost GameObject (Z_HO_TRG_Stats_Ghost) stands inside the
+    # skate shop, behind the shop front the converted level closes, and on P8 its ped speech prompt never
+    # goes away (no ObjectOutOfRadius for it), keeping Circle taken. Its trigger script now spawns a
+    # poll on the skater instead, as for the shop doors: within SHOP_DOOR_RADIUS of the sponsor step's
+    # spot in front of the shop, while the sponsor step is active or won, "Press \m5 to look at stat
+    # challenges"; Circle opens THAW's stats_selection_menu_create (on the skater, as the ped speech did)
+    spot = (-2482.44, 96.0, -1640.52)
+    out['Z_HO_TRG_Stats_GhostScript'] = f"""if not GotParam on_skater
+skater : Obj_SpawnScript Z_HO_TRG_Stats_GhostScript params = {{ on_skater }}
+return
+endif
+<hw_near> = 0
+while
+<hw_on> = 0
+if GoalManager_GoalIsActive Name = z_ho_goal_gaps31
+<hw_on> = 1
+endif
+if GoalManager_HasWonGoal Name = z_ho_goal_gaps31
+<hw_on> = 1
+endif
+Obj_GetPosition
+<hw_d> = (<Pos> - ({spot[0]}, {spot[1]}, {spot[2]}))
+if ((<hw_on> = 1) and ((<hw_d> . <hw_d>) < {SHOP_DOOR_RADIUS ** 2}))
+if (<hw_near> = 0)
+create_panel_message id = hw_stats_hint text = '\\m5 stat challenges' time = 100000
+endif
+<hw_near> = 1
+if Held Circle
+kill_panel_message_if_it_exists id = hw_stats_hint
+stats_selection_menu_create
+while
+if not ScreenElementExists id = stats_selection_anchor
+break
+endif
+wait 1 gameframe
+repeat
+wait 1 second
+<hw_near> = 0
+endif
+else
+if (<hw_near> = 1)
+kill_panel_message_if_it_exists id = hw_stats_hint
+endif
+<hw_near> = 0
+endif
+wait 1 gameframe
+repeat"""
     return out
 
 

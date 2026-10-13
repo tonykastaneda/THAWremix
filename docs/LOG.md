@@ -1415,3 +1415,24 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
     after Highcombo3's win.
 - Not seen yet: the dinosaur building in its after state on screen (the test cameras missed it), and
   the cutscenes (HO_LevelEvent_Dino.cut and the IGCs) are still skipped.
+
+### Sponsor challenge (mission 4): the stat challenges menu
+
+- THAW's stats board is a Ghost GameObject (Z_HO_TRG_Stats_Ghost, created by the sponsor step's start
+  script) inside the skate shop, behind the shop front the converted level closes; its ped speech
+  ("Press \ms to look at stat challenges") never went away on P8 (no ObjectOutOfRadius for it), so it
+  stayed on screen everywhere and kept Circle.
+- `p8goals shops` now also replaces its trigger script (Z_HO_TRG_Stats_GhostScript, in the zone's node
+  qb: `zone_script` searches every .qb of the pak now) with a poll spawned on the skater, as for the shop
+  doors: within 160 in of the sponsor step's spot in front of the shop, while that step is active or
+  won, "\m5 stat challenges"; Circle runs THAW's stats_selection_menu_create.
+- Two more P8 gaps: (1) stats.qb's spots name Hollywood Z_HO while its level structure is Houses'
+  (level = Z_Houses): StatsManager_GetGroupNumFromLevel found no group, so the menu returned at once;
+  build: `p8qb setdata stats.qb Z_HO=Z_Houses`. (2) build_stats_poster draws THAW sprites P8 lacks
+  (heart: CreateScreenElement null read at 0x08886cb0, called from 0x0882b768; spazzburst: a jump to 0);
+  heart, spazzburst and new_bg_2 become white2 (`p8qb rekeyall gamemenu_stats.qb`).
+- PPSSPP (P8V_TESTGOAL=z_ho_goal_gaps31): at the shop front "O stat challenges"; Circle -> SPONSOR
+  CHALLENGES, Stats 1 (Grind for 2 seconds, Land a 2,000 point combo, Caveman 1 times in one combo, Ollie
+  up 5 feet), Accept; Triangle out; skating again, the prompt gone away from the shop.
+- Not verified: winning by completing a stat challenge (THAW's M_ZHOGAPS31 gameplay pak spawns
+  Z_HO_Goal_SponsorChallenge_WinGoal, which waits for StatsManager_GetTotalGoalsComplete > 0).
