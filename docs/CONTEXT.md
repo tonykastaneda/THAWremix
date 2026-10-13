@@ -97,16 +97,22 @@ Where the port stands, how the work is done, and what comes next. The detailed h
   Challenges menu opens and accepts. Fixes: Z_HO -> Z_Houses in stats.qb, missing poster sprites ->
   white2.
 - PETA protesters created at the dinosaur while the dino step is not won.
+- Stores sell THAW's own CAS parts (`tools/p8cas.py`): THAW's male skater is P8's PUNK style (body, 25
+  hairs, the Hollywood clothing store's 29 shirts / 15 pants; P8's PUNK presets = THAW's default custom
+  skaters 1-3, so the story starts as THAW's skater 1). Converter: alpha cutouts. Facial hair is not
+  THAW's yet (a second texture pass on the head; the converter keeps one per material).
+- Sponsor step wins from a completed stat challenge (`p8goals sponsor`: the win poll THAW ran from a
+  Ghost now spawned by the step's start). Checked with P8V_STATTEST=1 (2,000 -> 100).
+- Dino event: DINO_HEAD 1 added (from the skipped cutscene's end script). On screen: before = dinosaur
+  on the diner roof + protesters; after = dinosaur gone, roof broken, fallen head on the street,
+  protesters gone. Test switches P8V_DINOAFTER, P8V_CAM=x,y,z,yaw, P8V_CREATE (build.py).
 - Hardware ISOs `work/iso/F THAW P8 stores.iso` (PSP-1000) and `G THAW P8 stores big (PSP-2000 3000).iso`
   (both no intro), checked in the emulator from the real menus. Not yet tested by the user on the PSP.
   They predate the protesters and the FallingDown model.
 
 ## Known gaps / not verified
 
-- Winning the sponsor step by actually completing a stat challenge (THAW's M_ZHOGAPS31 gameplay pak
-  waits for StatsManager_GetTotalGoalsComplete > 0).
-- The dinosaur's after state on screen (flags traced only; THAW node positions are object origins, so
-  cameras aimed from them missed), and the protesters disappearing at the event.
+- The dino event seen only with its flags set by a test switch, not after a played Highcombo3 win.
 - The FallingDown giver not seen on screen (model extents match Joey B.'s).
 - An occasional screenshot right after entering the barber shows the shop interior with no menu
   (likely another render pass); watch for it on hardware.
@@ -115,20 +121,23 @@ Where the port stands, how the work is done, and what comes next. The detailed h
 ## Next session
 
 1. Read the user's PSP results for ISOs F and G; fix anything hardware-only.
-2. Stores with THAW's own parts: right now the barber and clothing stores offer P8's hair, shirts and
-   pants. Convert THAW's CAS parts with the converter and give P8 part lists for them, as the THUG2
-   Remix build did (check how Remix did it first). Mind PedParts / TopDown memory (`docs/memorybudget.md`).
-3. Verify the sponsor win (complete one stat challenge in the emulator) and the dinosaur's after state
-   on screen (find where the dino is drawn, e.g. from the level geometry, then place a camera).
-4. THAW's character select on a new story: in THAW, Start New Story first shows four preset skaters
+2. Remaining Hollywood content (item 5 below), surveyed 2026-10-13:
+   - Cash and graffiti side goals: P8 kept THAW's goal_cash_goals / goal_graffiti_goals and calls them
+     at level load (mission_init_add_zone_sensitive_goals) with the slot's zone name (Z_Houses), so they
+     look for Z_Houses_TRG_Ped_CashGoal0n and find nothing; Hollywood's givers are Z_HO_TRG_Ped_CashGoal01-03
+     (bums) and Z_HO_TRG_Ped_GraffitiGoal01-04 (Ped_MexicanGraffiti, no model mapped yet).
+   - Rick Thorne's BMX goals (Z_HO_TRG_Ped_BikeGoal01-10): P8's goal_bike_goals.qb is empty and vanilla
+     has no bike (bmx_anims.pak is a 336-byte stub); Project Mod has SI_BMX and bmx_unloadable_anims (367 KB).
+   - Ambient: THAW creates 3 people + 5 pigeons + 4 cars at start (LifeNodes too); the 3 people were
+     measured cheap (-30 KB TopDown). Cars: THAW .mdl models (liberty, explorer, commander), none on P8.
+   - Cutscenes: THAW .cut not on P8's disc; candidate route: capture them from THAW PC and play as PMF.
+3. THAW's character select on a new story: in THAW, Start New Story first shows four preset skaters
    to pick from (THAW's story select, the Z_StorySelect level), and the story starts with that one.
    Here Story -> Start New Story -> difficulty goes straight into Hollywood with the current skater:
    build.py rekeys story_options_change_level to Hollywood's load script because P8 has no
    Z_StorySelect (loading THAW's z_mainmenu zone failed on it, see docs/LOG.md). Bring the four-preset
    pick back (THAW's presets as P8 appearances, shown in P8's own front end or a ported story select),
    checking how the THUG2 Remix build did it first.
-5. Remaining Hollywood content: graffiti-goal taggers and other ambient peds (Pedestrians are left
-   uncreated), Rick Thorne bike goals (Project Mod's BMX), vehicles, cutscenes.
-6. A new hardware ISO batch once 2-5 land.
+4. A new hardware ISO batch (stores with THAW parts, sponsor win and dino head are newer than F/G).
 
 The overnight stop hook (`.claude/keep_working.py`) is switched off by `work/autopilot.off`.
