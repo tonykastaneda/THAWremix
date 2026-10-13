@@ -1163,3 +1163,18 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   story starts on foot (board in hand); L+R gets on the board. A drop onto Rail_Kodak133/134
   (-1748, 175, -2478) with triangle held landed standing on the ledge top (y 142.8), not grinding:
   inconclusive (no speed along the rail).
+- **Cause found: no rails at all.** P8 PSP runs with RAILNODE_ASSETS_ENABLED (0x725bce21): its rail
+  manager's node-array path (FUN_0023eb1c, "add rails from node array") returns at once, and rails
+  come from the zone pak's 0x91e1028d entries ([count][1] then (x, y, z, 1.0) points; the level's is
+  the largest, small ones belong to models). `p8zone --strip` dropped Houses' (as a "prop") and nothing
+  put Hollywood's in. Memory check: a rail point appears twice in vanilla Houses (script vector
+  `00010000` and the rail manager's x,y,z,1.0) but only once in our Hollywood (script only).
+- Fix: p8zone puts THAW's own z_ho rail asset (152,552 bytes, 1,589 points) in the slot's level rail
+  entry. After it the rail manager's copy is in memory (Rail_Kodak29's point at 0x095275C0). The
+  asset's heights can differ from the node Pos (Kodak29: 95.3 in the asset, 35.3 in the node).
+- The emulator drop test was not reliable (teleport addresses change per boot); grinding to be
+  confirmed on the PSP with work/iso/E THAW P8 rails.iso (no intro). Test-aid notes: P8V_BASELINE +
+  P8V_AUTO boots shipped data straight into Houses (reference runs); P8V_NOGOALS builds crash about
+  20 s in (stale path). The ppsspp_ws log cap (20 MB on kill) came from a crash loop writing 1.8 GB.
+- User reports to fix next: the dinosaur building is missing (NODEFLAG_Z_HO_DINO_BEFORE/AFTER pieces),
+  and floor z-fighting between the bleachers across the street from the theater entrance.

@@ -251,6 +251,12 @@ def write_pak(slot_path, payloads, drop=()):
 # particles; they belong to the template's nodes (Houses' playground), not the zone put in its place
 TEMPLATE_PROPS = {'.mdl', '.stex', '.ske', '.ska', '.pfx', '4bc1e85e', '6290993b', '91e1028d'}
 
+# Rail assets: P8 PSP runs with RAILNODE_ASSETS_ENABLED, so its rail manager (FUN_0023eb1c) never
+# builds rails from the node array; they come from the zone pak's 0x91e1028d entries ([count][1] then
+# (x, y, z, 1.0) points). The level's own is the largest; the small ones belong to models. Without
+# the THAW zone's in the slot's level entry, no rail in the level exists (grind does nothing).
+RAILS = 0x91e1028d
+
 
 # entries of a zone pak whose key is qbkey('worlds\worldzones\<zone>\<zone><suffix>') (the entry
 # path less .psp); the named ones also carry that path, plus .psp, as their name
@@ -350,9 +356,14 @@ def main():
             payloads[i] = thaw('.qb', '_peds')
         elif k == '.gap':
             payloads[i] = thaw('.gap')
+    level_rails = max((i for i, e in enumerate(sents) if e['type'] == RAILS), key=lambda i: sents[i]['size'], default=None)
+    if level_rails is not None:
+        e = max((e for e in tents if e['type'] == RAILS), key=lambda e: e['size'])
+        payloads[level_rails] = tblob[e['offset']:e['offset'] + e['size']]
+        print(f'level rails: THAW {zone} rail asset ({struct.unpack_from("<I", payloads[level_rails])[0]} points)')
     payloads = {i: d for i, d in payloads.items() if d is not None}
     os.makedirs(a.outdir, exist_ok=True)
-    drop = {i for i, e in enumerate(sents) if a.strip and ext(e) in TEMPLATE_PROPS}
+    drop = {i for i, e in enumerate(sents) if a.strip and ext(e) in TEMPLATE_PROPS and i != level_rails}
     if drop:
         print(f'left out {len(drop)} of the slot pak\'s own prop entries')
     out = write_pak(a.slot_pak, payloads, drop)
