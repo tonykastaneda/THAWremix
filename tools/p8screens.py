@@ -11,7 +11,7 @@ images\\raw\\us\\loadscrn_us\\loadscrn_<name>.img.psp: a 0x20-byte header (forma
 then 480x272 linear RGBA8888. Houses' slot holds Hollywood (p8zone.py --slot z_houses).
 Project Mod: images\\raw\\us\\loadscrn_us\\loadscrn_<zone>.img.psp, a 0x20-byte header (format 2,
 512x274) then 512x274 RGBA8888 with the picture at the top left (alpha 0x80) and columns 480-511 alpha 0.
-Both: the boot screen is images\\raw\\us\\legal\\loadscrn_us.tga (and _uk), 480x272 24-bit bottom-up;
+Both: the boot screen is images\\raw\\us\\legal\\loadscrn_us.tga (and _uk), 480x272 24-bit top-down (boot_tga);
 save data shows images\\raw\\icon\\icon0.png (144x80) and pic1.png (480x272). THAW's screens are
 640x448, scaled to 480x272.
 """
@@ -66,6 +66,15 @@ def logo_on_black(logo, size, width, top=None):
     return out
 
 
+def boot_tga(im):
+    """The shipped boot screens' exact layout: this 18-byte header (480x272, 24-bit, top-left origin,
+    colour-map depth byte 0x18), BGR rows top to bottom, nothing after them (391,698 bytes). PIL's own
+    TGA (bottom-up, with a 26-byte footer) crashed a real PSP-3000 on a black screen before the legal
+    screen."""
+    head = bytes.fromhex('000002000000001800000000e00110011820')
+    return head + im.convert('RGB').resize((480, 272)).tobytes('raw', 'BGR')
+
+
 def write(out, rel, data):
     path = os.path.join(out, *rel.split('\\'))
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -91,7 +100,7 @@ def main():
         print(f'{rel} <- {thaw}')
     boot = thaw_screen(install, 'x')  # THAW's own title and legal text, as in the Remix build
     for name in BOOT:
-        boot.save(write(out, rf'{LEGAL_DIR}\{name}.tga', b''), compression=None, orientation=-1)
+        write(out, rf'{LEGAL_DIR}\{name}.tga', boot_tga(boot))
     if vanilla:  # the title card shown with the boot screen
         write(out, r'images\raw\us\loadscrn_us\loadscrn_x.img.psp', make(boot))
     print('boot title <- THAW title')

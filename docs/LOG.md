@@ -1127,3 +1127,9 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   and work/iso/THAW P8 big test.iso (`P8V_BIG=1`, every non-pigeon ped on; PSP-2000 run: TopDown
   53,669,888, same heaps as the tree). The big build run as a PSP-1000 hangs while loading (TopDown
   3 KB free), so on hardware: reaching Hollywood = the extra memory was granted.
+- Real PSP-3000 (ARK-4), THAW P8 normal.iso: boot chime, black screen, crash after about 10 s; the
+  legal screen never showed. Suspect: our boot screens (images\raw\us\legal\loadscrn_us/_uk.tga) were
+  PIL TGAs, 391,724 bytes (bottom-up, 26-byte footer, colour-map depth byte 0); P8's are 391,698 (18-byte
+  header with depth byte 0x18 and descriptor 0x20 = top-down, BGR rows, nothing after). p8screens
+  `boot_tga` now writes P8's exact layout. For the PSP: work/iso/A THAW P8 normal.iso (fixed) and
+  work/iso/B P8 baseline.iso (P8V_BASELINE: shipped data + the p8eboot patch only); both boot in PPSSPP.
