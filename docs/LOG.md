@@ -1314,3 +1314,14 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   the ped pak; `work/p8v/build.py` converts and uses it (P8V_P8MODELS=1 keeps P8's).
 - PPSSPP (gaps12 start): THAW's Mindy stands and animates in Hollywood, same pose and size as P8's,
   with THAW's look (the red streak in her hair, the brighter skirt). Ped pak 499,344 bytes.
+- Strips: thaw2p8skin keeps THAW's strips (cut at degenerate triangles and where a run outgrows the
+  palette, pieces overlapping by two vertices; FFACE 0x9b by the run's parity): THAW Mindy 142 -> 96 KB
+  (P8's own 89 KB).
+- Every part P8 PSP's profiles name but its disc lacks exists in THAW at the same path (generic
+  skater heads/torsos/pants/hair, Ped_Skateboard, bums, Pro_Reynolds, Pro_Thorne, Ped_Vato, Murphy,
+  DV guy). `work/p8v/build.py` now converts THAW's model of every part of the ped pak's profiles
+  (`p8zone.PED_PAK`: DV guy, Mindy, Barber, Boone, Murphy, BMX, ped_Skater_02/03, Pro_Reynolds,
+  Pro_Rick_Thorne, Ped_Bum01, ped_SkaterSelect_vato) and `p8zone.PROFILES` maps THAW's Hollywood
+  profiles to them (skaters, Reynolds, the jerk skater as Vato, bums). Ped pak 879,504 bytes; PSP-1000
+  PedParts 950,272 (928 KB). Standard route: no faults, TopDown free at the end 696,416 (was 1.28 MB).
+- PPSSPP: the caveman lesson's teacher and the punk skater race's "Joe Skater" are THAW's skaters.

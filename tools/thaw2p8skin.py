@@ -79,7 +79,7 @@ def read_thaw_skin(path):
             tris = [tuple(idx[i:i + 3]) for i in range(0, len(idx) // 3 * 3, 3)]
         tris = [t for t in tris if len({*t}) == 3]
         meshes.append(dict(material=u32(o + 0x1C), pos=pos, nrm=nrm, col=col, uv=uv, bones=bones, wts=wts,
-                           tris=tris))
+                           tris=tris, strip=list(idx) if prim == 5 else None))
     return materials, textures, meshes
 
 
@@ -97,6 +97,56 @@ def draws(mesh, palette_max):
         tris.append(t)
     if tris:
         out.append((pal, tris))
+    return out
+
+
+def strip_runs(mesh, palette_max):
+    """THAW's strip cut into runs [(parity, [vertex])] without degenerate triangles, none needing more
+    than palette_max bones (a longer run is cut, its pieces overlapping by two vertices)."""
+    st = mesh['strip']
+    runs, cur, start = [], [], 0
+    for i in range(len(st) - 2):
+        a, b, c = st[i], st[i + 1], st[i + 2]
+        if len({a, b, c}) < 3:
+            if len(cur) >= 3:
+                runs.append((start % 2, cur))
+            cur = []
+            continue
+        if not cur:
+            cur, start = [a, b, c], i
+        else:
+            cur.append(c)
+    if len(cur) >= 3:
+        runs.append((start % 2, cur))
+    out = []
+    for par, seq in runs:
+        piece, pbones, pstart = [], set(), 0
+        for j, v in enumerate(seq):
+            vb = set(mesh['bones'][v])
+            if len(piece) >= 3 and len(pbones | vb) > palette_max:
+                out.append(((par + pstart) % 2, piece))
+                pstart = j - 2
+                piece = seq[j - 2:j]
+                pbones = {b for u in piece for b in mesh['bones'][u]}
+            piece.append(v)
+            pbones |= vb
+        if len(piece) >= 3:
+            out.append(((par + pstart) % 2, piece))
+    return out
+
+
+def strip_draws(mesh, palette_max):
+    """[(palette, [(parity, run)])]: runs in order, a new draw when the palette would overflow."""
+    out, pal, runs = [], set(), []
+    for par, run in strip_runs(mesh, palette_max):
+        need = {b for v in run for b in mesh['bones'][v]}
+        if len(pal | need) > palette_max and runs:
+            out.append((sorted(pal), runs))
+            pal, runs = set(), []
+        pal |= need
+        runs.append((par, run))
+    if runs:
+        out.append((sorted(pal), runs))
     return out
 
 
@@ -163,7 +213,9 @@ def convert(src, out, name=None, max_side=64, palette_max=8):
         rec = materials.get(m['material'])
         tcks = struct.unpack_from('<I', rec, 0x40)[0] if rec else 0
         tex = tb.add(tcks, textures[tcks][0]) if tcks in textures else tb.add('white', thaw2psp.white_texture())
-        for pal, tris in draws(m, palette_max):
+        groups = ([(p, [('tris', t)]) for p, t in draws(m, palette_max)] if m['strip'] is None else
+                  [(p, [('strip', r) for r in rs]) for p, rs in strip_draws(m, palette_max)])
+        for pal, items in groups:
             vt = vtype(len(pal))
             recs.append((1, len(dl), m['material'], 0, 0x808080))
             dl += material_words(tex, vt)
@@ -174,13 +226,22 @@ def convert(src, out, name=None, max_side=64, palette_max=8):
             for b in pal:
                 dl += ge(0x0A, 0x40 * b)
                 max_bone = max(max_bone, b)
-            for i in range(0, len(tris), 21000):  # PRIM counts are 16-bit
-                chunk = tris[i:i + 21000]
-                dl += ge(0x04, 3 << 16 | len(chunk) * 3)
-                for t in chunk:
-                    for v in t:
+            for kind, item in items:
+                if kind == 'tris':
+                    for i in range(0, len(item), 21000):  # PRIM counts are 16-bit
+                        chunk = item[i:i + 21000]
+                        dl += ge(0x04, 3 << 16 | len(chunk) * 3)
+                        seq = [v for t in chunk for v in t]
+                        for v in seq:
+                            verts += pack_vertex(m, v, pal)
+                else:
+                    par, seq = item
+                    dl += ge(0x9B, par) + ge(0x04, 4 << 16 | len(seq))  # FFACE by the run's parity
+                    for v in seq:
                         verts += pack_vertex(m, v, pal)
-                        radius = max(radius, float(np.linalg.norm(m['pos'][v])) * 16)
+                    seq = seq
+                for v in seq:
+                    radius = max(radius, float(np.linalg.norm(m['pos'][v])) * 16)
             verts += bytes(-len(verts) % 4)
             dl += ge(0xFF) + ge(0x0B)
     name = name or os.path.basename(out)
