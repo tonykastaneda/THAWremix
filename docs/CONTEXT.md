@@ -121,7 +121,7 @@ Where the port stands, how the work is done, and what comes next. The detailed h
 ## Next session
 
 1. Read the user's PSP results for ISOs F and G; fix anything hardware-only.
-2. Remaining Hollywood content (item 5 below), surveyed 2026-10-13:
+2. Remaining Hollywood content, surveyed 2026-10-13:
    - Cash and graffiti side goals: P8 kept THAW's goal_cash_goals / goal_graffiti_goals and calls them
      at level load (mission_init_add_zone_sensitive_goals) with the slot's zone name (Z_Houses), so they
      look for Z_Houses_TRG_Ped_CashGoal0n and find nothing; Hollywood's givers are Z_HO_TRG_Ped_CashGoal01-03
