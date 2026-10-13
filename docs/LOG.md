@@ -1436,3 +1436,15 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   up 5 feet), Accept; Triangle out; skating again, the prompt gone away from the shop.
 - Not verified: winning by completing a stat challenge (THAW's M_ZHOGAPS31 gameplay pak spawns
   Z_HO_Goal_SponsorChallenge_WinGoal, which waits for StatsManager_GetTotalGoalsComplete > 0).
+
+### Hardware batch (2026-10-13 morning)
+
+- work/iso/F THAW P8 stores.iso (PSP-1000 build, P8V_NOINTRO) and work/iso/G THAW P8 stores big
+  (PSP-2000 3000).iso (P8V_BIG + P8V_NOINTRO; ARK-4 needs "use extra memory" forced on). Both through
+  `mkumd.py --like <P8 v1.00> --compact-wad PSP_GAME/USRDIR/datap --sectors`.
+- PPSSPP on the ISOs themselves: F (PSP-1000): menu -> Story -> Start New Story -> Normal -> Hollywood
+  at the barber door -> Circle -> BARBERSHOP -> Hair -> Long Mohawk applied. G (as PSP-2000, the test
+  copy's PSPModel set to 1 for the run and back to 0): same, store menus and submenus.
+- One G screenshot 6 s after Circle showed THAW's barbershop interior with no menu; a rerun with shots
+  at 1.5-14 s showed the store normally every time (likely a capture of another render pass; the same
+  frame appeared once on the PSP-1000 tree). Watch for it on hardware.
