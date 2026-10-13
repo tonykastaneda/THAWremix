@@ -1342,3 +1342,33 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
 - Not yet: the look change. P8 has no load_cas level (pause_launch_level load_cas -> change_level
   freezes the screen) and no in-level CAS (create_pre_cas_menu is undefined, cas_stores.qb empty);
   P8's CAS is a front-end screen, so the look change needs a round trip through the front end.
+
+### Barber and clothing stores: the look change (missions 1-2 done)
+
+- P8 keeps THAW's in-level store machinery except its scripts: pak/CAS_common (Integrated_CAS_*
+  menus, the item lists built from master_editable_list), the store cleanup in
+  cleanup_before_changing_level_unload_all_paks (entering_cas_store, cas_store_pak_file), and P8's own
+  barber leftovers (skutils' Integrated_CAS_Ped_Script, "Press \m5 to select hairstyle"). THAW's
+  cas_stores.qb scripts (enter_cas_store, cas_store_enter: teleport into the store interior, load
+  CAS_common and the store pak, options menu) are gone, and so is cas_store_params.
+- `p8goals.py shops` now runs those steps in place (qbc-compiled, in two of the zone's unused scripts):
+  Circle at the door -> HO_Ped_Barbershop: skater on the *_Ext door node, input off, HUD hidden,
+  LoadPak pak/CAS_common (localized), RememberTemporaryAppearance, P8's
+  Integrated_CAS_create_options_menu with THAW's barbershop (Hair, Hair Color, Facial Hair) or clothing
+  (Shirt, Shirt Color 1, Pants, Pants Color) options; DONE/back -> HO_Ped_Graphicshop: menu gone, pak
+  unloaded, skater back at the door walking, input on, GoalManager_WinGoal (goal id carried in the
+  P8 global last_cas_item_id).
+- Two P8 gaps fixed on the way: (1) DoScreenElementMorph (CFunc at 0x24074) on a missing element is a
+  null read (PPSSPP "Bad memory access 00000004" at 0x088280ac): P8's menu maker (nextmenu_cas.qb
+  0xfb625126) no longer makes THAW's current_scrolling_menu / edit_skater_menu arrows, which the CAS
+  menu scripts morph; stand-ins are created first. (2) P8's cas_setup_rotating_camera plays fixed
+  world cameras of its front-end CAS room (cas_scripts.qb in pak/cas, per body type), which land on
+  the Walk of Fame in Hollywood: the store calls none (no cam_anim / cam_anim_sub) and plays its own
+  PlayIGCCam in front of the door node. IGC camera quats: a yaw-only (0, sin(a/2), 0) looks down
+  (-sin a, 0, -cos a); a node's yaw a faces (sin a, 0, cos a) (found with a 4-yaw test shot).
+- THAW's barbershop and clothing interiors (*_Int / *_Edit nodes near y = 0) are in the converted level
+  but unused for now.
+- PPSSPP: story start -> barber door -> Circle -> BARBERSHOP menu with the skater framed on the right ->
+  Hair -> P8's styles (Short Mohawk, Long Mohawk, Devillock...) change the model live -> DONE -> goal
+  won, "Change your clothes" -> clothing door -> Circle -> Shirt (Baseball T) and Pants (Cargo Pants)
+  live -> DONE -> save prompt -> skating with the new look, input back.

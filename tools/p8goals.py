@@ -22,6 +22,7 @@ THAW's goals pass pak_info { prefix = "M_ZHOGAPS31" start gameplay } and goal_ut
 goal_load_pak prefix and suffix (start, gameplay, success, fail); P8's goal_load_pak then builds a
 path from a missing pak_short_name and LoadPak gets no name (a null file, module 0xf480).
 """
+import math
 import os
 import re
 import struct
@@ -276,17 +277,53 @@ def zone_script(pak_path, script, source):
 SHOP_DOOR_RADIUS = 160
 
 
+# THAW's store menus (cas_stores.qb's edit_skater_barbershop_options / edit_skater_clothing_options,
+# less the other cities' shirt lists and the logo entries, and without their cam_anim_sub: P8's CAS
+# cameras are fixed spots in its front-end CAS room): what P8's in-level CAS menu engine
+# (pak/CAS_common's Integrated_CAS_create_options_menu) shows.
+# (door node, its position and yaw in THAW's z_ho.qb, camera distance in front and height, options)
+STORE_OPTIONS = {
+    'barbershop': ('Z_HO_TRG_Restart_BarberShop_Ext', (-2505.94, 96.18, -2682.92), 1.570797, 60, 62, '''[
+{ group_title = "BARBERSHOP" text = "Hair" submenu = hair_menu
+is_visible_script = check_for_lockout_parts
+is_visible_params = { parts = [ skater_m_head skater_f_head hat ] menu_parts = [ skater_m_hair skater_f_hair ] } }
+{ text = "Hair Color" submenu = hair_color_menu is_enabled_script = check_if_part_colorable
+is_enabled_params = { parts = [ skater_m_hair skater_f_hair ] extra_script = check_if_parts_editable
+extra_script_params = { parts = [ skater_m_hair skater_f_hair ] } }
+modifier part_parent = "Hair" }
+{ text = "Facial Hair" submenu = jaw_menu is_visible_script = currently_editing_male
+is_enabled_script = check_for_lockout_parts
+is_enabled_params = { parts = [ skater_m_head hat ] menu_parts = [ skater_m_jaw ] } cam_angle = 0 list }
+]'''),
+    'clothingshop': ('Z_HO_TRG_Restart_CASShop_Ext', (-2565.23, 95.89, -2030.75), 1.577415, 110, 45, '''[
+{ group_title = "CLOTHING" text = "Shirt" submenu = shirt_style_menu }
+{ text = "Shirt Color 1" submenu = shirt_color_menu is_enabled_script = check_if_part_colorable
+is_enabled_params = { parts = [ skater_m_torso skater_f_torso ] } modifier part_parent = "Shirt" }
+{ text = "Pants" submenu = pants_menu }
+{ text = "Pants Color" submenu = pants_color_menu is_enabled_script = check_if_part_colorable
+is_enabled_params = { parts = [ skater_m_legs skater_f_legs ] } group = legs_items modifier part_parent = "Pants" }
+]'''),
+}
+
+
 def shop_sources():
     """The barber and clothing store steps, in THAW's own scripts (their door triggers live in mission
-    collision P8 cannot load, and THAW's shop UI is not in P8): the goal's start script spawns a poll on
-    the skater; within SHOP_DOOR_RADIUS of the shop door (THAW's *_Ext restart node) it shows a prompt,
-    and Circle there (the \m5 glyph) wins the goal. P8 has no in-level Create-A-Skater (no load_cas level:
-    pause_launch_level load_cas freezes the screen in change_level), so the look change itself is still
-    to do (P8's CAS is a front-end screen)."""
-    shops = (('Z_HO_ChangeYourLookWin', 'Z_HO_EnterBarberShop', 'z_ho_goal_gaps15', (-2505.9, 96.2, -2682.9)),
-             ('Z_HO_ChangeYourLookWin2', 'Z_HO_EnterClothingShop', 'z_ho_goal_gaps30', (-2565.2, 95.9, -2030.7)))
+    collision P8 cannot load): the goal's start script spawns a poll on the skater; within
+    SHOP_DOOR_RADIUS of the shop door (THAW's *_Ext restart node) it shows a prompt, and Circle there
+    (the \\m5 glyph) opens the store where the skater stands. THAW teleported into the store interior
+    (cas_stores.qb's enter_cas_store / cas_store_enter, stripped from P8); the same steps run in place:
+    pak/CAS_common loaded in the level, P8's own Integrated_CAS_create_options_menu with THAW's store
+    options (each pick is an EditPlayerAppearance + RefreshSkaterModel), and leaving the menu unloads
+    it, puts the skater at the door walking and wins the goal. HO_Ped_Barbershop opens the store and
+    HO_Ped_Graphicshop leaves it (two of the zone's unused scripts); last_cas_item_id (a P8 global
+    nothing else uses in level) carries the goal. The skater stands on the door node, the camera in
+    front of it (P8's cas_setup_rotating_camera aims at its front-end CAS room). P8's menu maker (nextmenu_cas.qb) no longer makes
+    THAW's current_scrolling_menu or the edit_skater_menu arrows, which the CAS menu scripts morph
+    (DoScreenElementMorph on a missing element is a null access on P8): stand-ins are made first."""
+    shops = (('Z_HO_ChangeYourLookWin', 'Z_HO_EnterBarberShop', 'z_ho_goal_gaps15', 'barbershop', (-2505.9, 96.2, -2682.9)),
+             ('Z_HO_ChangeYourLookWin2', 'Z_HO_EnterClothingShop', 'z_ho_goal_gaps30', 'clothingshop', (-2565.2, 95.9, -2030.7)))
     out = {}
-    for start, poll, goal, door in shops:
+    for start, poll, goal, kind, door in shops:
         out[start] = f'skater : Obj_SpawnScript {poll}'
         out[poll] = f'''<hw_near> = 0
 while
@@ -303,7 +340,15 @@ endif
 <hw_near> = 1
 if Held Circle
 kill_panel_message_if_it_exists id = hw_shop_hint
-GoalManager_WinGoal Name = {goal}
+DisablePlayerInput
+while
+if not Held Circle
+break
+endif
+wait 1 gameframe
+repeat
+change last_cas_item_id = {goal}
+SpawnScriptLater HO_Ped_Barbershop params = {{ Type = {kind} }}
 break
 endif
 else
@@ -314,6 +359,67 @@ endif
 endif
 wait 1 gameframe
 repeat'''
+    def camera(pos, yaw, dist, height):
+        # IGC camera quats are (x, y, z) of a unit quaternion (w implied); a yaw-only camera looks
+        # down (-sin yaw, 0, -cos yaw), and a node's yaw faces (sin yaw, 0, cos yaw): the camera
+        # dist in front of the skater with the node's yaw faces it
+        # moved sideways by dist * 0.4 so the skater stands right of the menu
+        side = -dist * 0.4
+        x = pos[0] + dist * math.sin(yaw) + side * math.cos(yaw)
+        z = pos[2] + dist * math.cos(yaw) - side * math.sin(yaw)
+        return (f'PlayIGCCam {{ LockTo = world Pos = ({x:.2f}, {pos[1] + height:.2f}, {z:.2f}) '
+                f'Quat = (0.0, {math.sin(yaw / 2):.6f}, 0.0) FOV = 72.0 time = 0 play_hold }}')
+    pick = ''.join(f'''if (<Type> = {kind})
+<hw_options> = {options}
+ResetSkaters RestartWalking node_name = {node}
+endif
+''' for kind, (node, pos, yaw, dist, height, options) in STORE_OPTIONS.items())
+    cams = ''.join(f'''if (<Type> = {kind})
+{camera(pos, yaw, dist, height)}
+endif
+''' for kind, (node, pos, yaw, dist, height, options) in STORE_OPTIONS.items())
+    out['HO_Ped_Barbershop'] = pick + '''change entering_cas_store = 1
+GoalManager_PauseAllGoals
+skater : DisablePlayerInput
+hide_all_hud_items
+hide_compass_anchor
+wait 2 gameframes
+LoadPak "pak/CAS_common/CAS_common.pak" localized
+MakeSkaterGoto skaterinit params = { Walk }
+GetCurrentSkaterProfileIndex
+RememberTemporaryAppearance { player = <currentSkaterProfileIndex> Name = cas_preview_temp_profile NoFaceTexture }
+SetScreenElementLock id = root_window off
+CreateScreenElement { parent = root_window id = cas_store_anchor Type = ContainerElement }
+CreateScreenElement { parent = cas_store_anchor id = current_scrolling_menu Type = ContainerElement }
+CreateScreenElement { parent = cas_store_anchor id = edit_skater_menu_up_arrow Type = ContainerElement }
+CreateScreenElement { parent = cas_store_anchor id = edit_skater_menu_down_arrow Type = ContainerElement }
+skater : DisablePlayerInput
+KillSkaterCamAnim ALL
+''' + cams + '''wait 1 gameframes
+SetButtonEventMappings unblock_menu_input
+SpawnScriptNow Integrated_CAS_create_options_menu params = { options_array = <hw_options>
+pad_back_script = HO_Ped_Graphicshop parent = cas_store_anchor }
+MakeSkaterGoto Skater_Playanim params = { anim = WStand cycle blendperiod = 0 }'''
+    doors = ''.join(f'''if (last_cas_item_id = {goal})
+ResetSkaters RestartWalking node_name = {STORE_OPTIONS[kind][0]}
+endif
+''' for _, _, goal, kind, _ in shops)
+    out['HO_Ped_Graphicshop'] = '''dialog_box_exit
+SetButtonEventMappings block_menu_input
+if ScreenElementExists id = cas_store_anchor
+DestroyScreenElement id = cas_store_anchor
+endif
+show_all_hud_items
+Show_Compass_anchor
+BeginUnloadPak "pak/CAS_common/CAS_common.pak" localized
+EndUnloadPak "pak/CAS_common/CAS_common.pak" localized
+change entering_cas_store = 0
+KillSkaterCamAnim ALL
+''' + doors + '''skater : enableplayerinput
+SetButtonEventMappings unblock_menu_input
+GoalManager_UnpauseAllGoals
+GoalManager_WinGoal Name = (last_cas_item_id)
+change last_cas_item_id = 0'''
     return out
 
 
