@@ -1504,3 +1504,17 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   on; clothing store Shirt (Sleeveless, Sweater ...) and Pants (Jeans Ripped ...) change the model.
   No faults. Heaps in the barber: skatergeomheap0 271 KB free (was 220 KB with P8's parts), TopDown
   382 KB free.
+
+### Sponsor challenge (mission 4): won by a completed stat challenge
+
+- THAW starts the step's win poll (Z_HO_Goal_SponsorChallenge_WinGoal: every 5 frames
+  `skater : StatsManager_GetTotalGoalsComplete`, > 0 wins z_ho_goal_gaps31) from the TriggerScript of a
+  Ghost GameObject in M_ZHOGAPS31_gameplay (TRG_G_GAPS31_StatsDummy). P8 creates no Ghosts, so it
+  never ran. `p8goals sponsor` (build.py): the step's start script spawns it, its cleanup
+  (goal_deactivate_script, also run first by the start) kills it. The StatsManager member functions
+  are all in P8's executable (their checksums appear as lui/ori pairs).
+- Test switch P8V_STATTEST=1: stats.qb's 'Land a 2,000 point combo' becomes 100.
+- PPSSPP (P8V_TESTGOAL=z_ho_goal_gaps31, P8V_STATTEST=1): O stat challenges -> Accept (the board then
+  offers only Exit) -> right, up into the quarter pipe beside the skate shop, kickflip, land ->
+  GoalManager_WinGoal z_ho_goal_gaps31, goal_success_messages, goal_unload_pak (p8trace). The same
+  path runs at the real 2,000.

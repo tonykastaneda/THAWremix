@@ -365,6 +365,17 @@ def zone_append(pak_path, script, source):
 PROTESTERS = ('Z_HO_TRG_Ped_Protester_01', 'Z_HO_TRG_Ped_Protester_04', 'Z_HO_TRG_Ped_Protester_05')
 
 
+def sponsor(zone_pak):
+    """The sponsor step's win: THAW polls StatsManager_GetTotalGoalsComplete from the TriggerScript of
+    a Ghost GameObject in the step's gameplay pak (M_ZHOGAPS31_Gameplay_TRG_G_GAPS31_StatsDummy), and
+    P8 creates no Ghosts (they crash scene setup), so the poll never ran. The step's start script spawns
+    it instead (Z_HO_Goal_SponsorChallenge_WinGoal: once a stat challenge is complete, the step is
+    won) and its cleanup (goal_deactivate_script, also run first thing by the start) stops it."""
+    zone_append(zone_pak, 'Z_HO_Goal_SponsorChallenge_Cleanup',
+                'KillSpawnedScript Name = Z_HO_Goal_SponsorChallenge_WinGoal')
+    zone_append(zone_pak, 'Z_HO_Goal_SponsorChallenge_Start', 'SpawnScriptLater Z_HO_Goal_SponsorChallenge_WinGoal')
+
+
 def protesters(zone_pak):
     zone_append(zone_pak, '0xb58ff31f', chr(10).join(
         ['if not GoalManager_HasWonGoal Name = Z_HO_Goal_Highcombo3'] +
@@ -744,6 +755,8 @@ def main():
         zone_script(sys.argv[2], sys.argv[3], sys.argv[4].replace(chr(92) + 'n', chr(10)))
     elif sys.argv[1] == 'protesters':  # <zone .pak.psp>
         protesters(sys.argv[2])
+    elif sys.argv[1] == 'sponsor':  # <zone .pak.psp>
+        sponsor(sys.argv[2])
     elif sys.argv[1] == 'zonerekey':  # <zone .pak.psp> <script> <old> <new>
         zone_rekey(*sys.argv[2:6])
     elif sys.argv[1] == 'missions':
