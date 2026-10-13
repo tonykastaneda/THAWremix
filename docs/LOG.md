@@ -1384,3 +1384,34 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
 - Ped pak 960,608 bytes: the PSP-1000 PedParts heap goes from 928 KB to 1 MB (TopDown had ~696 KB free).
 - PPSSPP (P8V_TESTGOAL=z_ho_goal_gaps23): "Buy the dino head $200" dialog; Joey B. stands by the
   skater ("Joey B.: O to talk") in THAW's look (work pants, tool belt, brown jacket).
+
+### Story chain test: the whole Hollywood story through the dinosaur event
+
+- `P8V_STORYRUN=1` (test build, `p8goals.py storyrun`): chapter_1_startup spawns a driver (in the zone's
+  Z_HO_GapStart_Bob2Bob) that wins whatever goal runs (GoalManager_GetActiveGoalId, plus THAW's series
+  children by name: GetActiveGoalId misses some, e.g. the caveman series' Gaps40/Gaps4) or activates
+  the first of STORY_RUN not won unless locked; a panel names the step. Once Highcombo3 is won it also
+  cuts to world cameras for a look at the dinosaur. The emulator test presses X every 11 s (save
+  prompts default to No).
+- Chain seen in PPSSPP: gaps15 (look) -> save -> gaps30 (clothes) -> counter / Gaps40 / Gaps4 (caveman,
+  "New Trick: Caveman") -> gaps31 (sponsor) -> gaps2 (Whofleck) -> Counter2 / Gaps8 -> counter4 / Gaps16
+  (revert, "New Trick: Manual", "Revert") -> gaps5 / Gaps6 (get your stuff back) -> highcombo /
+  Highcombo2 / Highcombo3 (the dino pool) -> dino level event -> save -> chapter 2 (gaps23 "Buy the dino
+  head" stays locked behind it, as in THAW).
+- Fixes found on the way (all were null reads in LoadPak, FUN_0018ce2c: it reads the size of a file it
+  failed to open; caught with a PPSSPP breakpoint on FUN_0000f480 with condition a0 == 0, ra 0x08990f9c):
+  - chapter_info's level-event atoms name their mission pak's folder THAW's way
+    (missions/worldzones/M_ZHOHIGHCOMBO3/M_ZHOHIGHCOMBO3_SUCCESS; also GAPS13, Chinese); P8's are flat.
+    `p8goals.py scriptstr` swaps string literals inside a packed script (here
+    chapter_info_register_structure), and the build points them at missions/worldzones/<m>_SUCCESS.
+  - game_progress_process_igc also loads <pak>_text.pak (localized): `p8goals missions` now converts
+    THAW's mission _text paks too (80 of them; delete work/p8v/missions_out to rebuild the cache).
+  - Twelve chapter_info IGC atoms load THAW IGC asset paks (pak/igc/z_ho_post_dino, z_bh_intro, ...),
+    none on P8's disc; IGC scenes are skipped anyway, so `p8goals.py igcpaks` renames their Pak param
+    (thx_igc_pak_absent): nothing loads, PlayIGCScene still runs, the story order holds.
+  - The dino event's state change is in its IGC shot script (M_ZHOHIGHCOMBO3_SUCCESS_Shot2), never run
+    with the IGC skipped: `p8goals.py zonescript` (zone_script on any zone or mission pak) puts
+    DINO_BEFORE 0, DINO_AFTER 1, DINO_BLDG_AFTER 1 in the success pak's startup. Traced in PPSSPP right
+    after Highcombo3's win.
+- Not seen yet: the dinosaur building in its after state on screen (the test cameras missed it), and
+  the cutscenes (HO_LevelEvent_Dino.cut and the IGCs) are still skipped.

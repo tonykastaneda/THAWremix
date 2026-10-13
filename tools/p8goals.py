@@ -225,6 +225,62 @@ def story_flags(pakp, pabp):
     print('chapter_1_startup: SetAppropriateNodeFlags always')
 
 
+STORY_RUN = ('z_ho_goal_gaps15', 'z_ho_goal_gaps30', 'z_ho_goal_counter', 'z_ho_goal_gaps31', 'z_ho_goal_gaps2',
+             'z_ho_goal_counter4', 'z_ho_goal_gaps5', 'z_ho_goal_highcombo', 'z_ho_goal_gaps23', 'z_ho_goal_gaps7',
+             'z_ho_goal_gaps17', 'z_ho_goal_gaps20', 'z_ho_goal_gaps13', 'z_ho_goal_gaps19')
+# series children (THAW's child = ...): they run in their parent's place and are only won
+STORY_RUN_CHILDREN = ('Z_HO_Goal_Gaps40', 'Z_HO_Goal_Gaps4', 'Z_HO_Goal_Counter2', 'Z_HO_Goal_Gaps8',
+                      'Z_HO_Goal_Gaps16', 'Z_HO_Goal_Highcombo2', 'Z_HO_Goal_Highcombo3', 'Z_HO_Goal_Gaps22',
+                      'Z_HO_Goal_Gaps21', 'Z_HO_Goal_Gaps18', 'Z_HO_Goal_Gaps6', 'Z_HO_Goal_Gaps9',
+                      'Z_HO_Goal_Gaps10', 'Z_HO_Goal_Gaps11')
+STORY_RUN_SCRIPT = 'Z_HO_GapStart_Bob2Bob'  # a gap start no node of the converted level triggers
+
+
+def story_run(pakp, pabp, zone_pak):
+    """Test build only (P8V_STORYRUN): the story plays itself. chapter_1_startup spawns a driver that
+    wins whatever goal GoalManager_GetActiveGoalId names (a series' children; it misses some, e.g.
+    the barber step), else takes the first goal of STORY_RUN not won: won if active, else activated
+    unless locked; a panel names it. It stops where a goal stays locked (the story's own
+    gating), which is the point: the chain, its unlocks and level events run as in play."""
+    import qb2
+    # once the dino event has run: two world cameras on the dinosaur building (screenshots check its state)
+    look = []
+    tx, tz = -2646.0, 1583.0  # the dinosaur's eyes (THAW node Z_HO_NightOn_03_HO_Before_Dino01_eyes)
+    for dx, dz in ((0, 1600), (0, -1600), (1600, 0), (-1600, 0)):
+        yaw = math.atan2(dx, dz)  # look down (-sin yaw, 0, -cos yaw), toward the dinosaur
+        look += ['KillSkaterCamAnim ALL',
+                 f'PlayIGCCam {{ LockTo = world Pos = ({tx + dx:.1f}, 450.0, {tz + dz:.1f}) '
+                 f'Quat = (0.0, {math.sin(yaw / 2):.6f}, 0.0) FOV = 72.0 time = 0 play_hold }}', 'wait 5 seconds']
+    look += ['KillSkaterCamAnim ALL']
+    body = ['wait 10 seconds', '<hw_looked> = 0', 'while',
+            'if GoalManager_HasWonGoal Name = Z_HO_Goal_Highcombo3', 'if (<hw_looked> = 0)', '<hw_looked> = 1',
+            'wait 15 seconds', *look, 'endif', 'endif',
+            'if GoalManager_GetActiveGoalId',  # whatever runs (a series' child too)
+            "create_panel_message id = hw_story_run text = 'story run: winning the active goal' time = 100000",
+            'wait 4 seconds', 'if GoalManager_GoalIsActive Name = <goal_id>', 'GoalManager_WinGoal Name = <goal_id>',
+            'endif', 'wait 8 seconds', 'else', '<hw_left> = 0']
+    for c in STORY_RUN_CHILDREN:
+        body += [f'if GoalManager_GoalIsActive Name = {c}',
+                 f"create_panel_message id = hw_story_run text = 'story run: {c[10:]}' time = 100000",
+                 'wait 4 seconds', f'GoalManager_WinGoal Name = {c}', 'wait 8 seconds', '<hw_left> = 1', 'endif']
+    for g in STORY_RUN:
+        body += [f'if (<hw_left> = 0)', f'if not GoalManager_HasWonGoal Name = {g}', '<hw_left> = 1',
+                 f"create_panel_message id = hw_story_run text = 'story run: {g[10:]}' time = 100000",
+                 f'if GoalManager_GoalIsActive Name = {g}', 'wait 4 seconds', f'GoalManager_WinGoal Name = {g}',
+                 'wait 8 seconds', 'else', f'if not GoalManager_GoalIsLocked Name = {g}',
+                 f'GoalManager_ActivateGoal Name = {g}', 'wait 4 seconds', 'endif', 'endif', 'endif', 'endif']
+    body += ['if (<hw_left> = 0)', "create_panel_message id = hw_story_run text = 'story run: all won' time = 100000",
+             'break', 'endif', 'endif', 'wait 2 seconds', 'repeat']
+    zone_script(zone_pak, STORY_RUN_SCRIPT, chr(10).join(body))
+    line = name('SpawnScriptLater') + name(STORY_RUN_SCRIPT) + bytes([NL])
+
+    def edit(code):
+        at = next(o for o, t, pl in qb2.tokens(code) if t == NAME and pl == struct.pack('<I', pak.qbkey('ChangeNodeFlag')))
+        return insert_code(code, at, line)
+    edit_script(pakp, pabp, 'menu' + chr(92) + 'chapter_info.qb.psp', 'chapter_1_startup', edit)
+    print('story run: chapter_1_startup spawns', STORY_RUN_SCRIPT)
+
+
 def coim_around_save(pakp, pabp, coim=COIM_SIZE):
     """Saving pushes temporary script pools (20000 CComponent, 9000 CStruct, 3000 CVector, ~440 KB)
     onto the main heap, which has 422 KB free with THAW's Hollywood and its goals loaded: the last
@@ -502,7 +558,46 @@ def missions(thaw_data, out, empty_level, prefixes):
             open(os.path.join(out, rel[:-len('.pak.psp')] + '.psp_level'), 'wb').write(level)
             made.append(rel)
             print(f'{rel}: {len(ents) - len(drop)} of {len(ents)} entries')
+            # its localized text pak (LoadPak <part>_text.pak localized: the success IGCs load one; a
+            # missing pak is a null read in LoadPak), its .qb as is, names .ps2 -> .psp
+            tsrc = os.path.join(root, m, part, f'{part}_text.pak.ps2')
+            if os.path.exists(tsrc):
+                tents, _ = p8zone.load_pak(tsrc)
+                t = bytearray(p8zone.write_pak(tsrc, {}, {i for i, e in enumerate(tents) if pak.EXT.get(e['type']) not in KEEP}))
+                for e in pak.read_entries(bytes(t))[0]:
+                    if e['flags'] & 0x20:
+                        at = e['entry_pos'] + 0x20
+                        n = t[at:at + 160].split(b'\0', 1)[0].decode('latin-1')
+                        if n.lower().endswith('.ps2'):
+                            t[at:at + 160] = (n[:-4] + '.psp').encode('latin-1').ljust(160, b'\0')
+                trel = rel[:-len('.pak.psp')] + '_text.pak.psp'
+                open(os.path.join(out, trel), 'wb').write(t)
+                made.append(trel)
     return made
+
+
+def igc_paks(pakp, pabp):
+    """chapter_info's IGC atoms (game_progress_process_igc) load their scene's pak from pak/igc/<scene>:
+    THAW's IGC assets, none of which P8's disc has, and LoadPak of a missing file is a null read
+    (FUN_0018ce2c). The IGC scenes themselves are skipped (igcskip), so those atoms lose their Pak
+    param (renamed thx_igc_pak_absent): GotParam Pak fails and nothing is loaded; PlayIGCScene still
+    runs, so the story's order is kept."""
+    import qb2
+    off = name('Pak') + bytes([EQ, STRING])
+    new_key = name('thx_igc_pak_absent')
+
+    def edit(code):
+        n = 0
+        for o, t, pl in list(qb2.tokens(code)):
+            if t == STRING and pl[4:].decode('latin-1').rstrip(chr(0)).lower().startswith('pak/igc/'):
+                # the Pak = "<name>" just before this folder = "pak/igc/..." in the same struct
+                at = code.rfind(off, 0, o)
+                assert at >= 0 and o - at < 80, 'no Pak before an igc folder'
+                code = code[:at] + new_key + code[at + 5:]
+                n += 1
+        print(f'chapter_info: {n} IGC atoms without their pak/igc pak')
+        return code
+    edit_script(pakp, pabp, 'menu' + chr(92) + 'chapter_info.qb.psp', 'chapter_info_register_structure', edit)
 
 
 def main():
@@ -542,6 +637,23 @@ def main():
     elif sys.argv[1] == 'shops':  # <zone .pak.psp>
         for name, src in shop_sources().items():
             zone_script(sys.argv[2], name, src)
+    elif sys.argv[1] == 'storyrun':  # <qb.pak> <qb.pab> <zone .pak.psp>
+        story_run(*sys.argv[2:5])
+    elif sys.argv[1] == 'scriptstr':  # <qb.pak> <qb.pab> <file> <script> <old>=<new> ...: string literals
+        def swap(code):
+            for pair in sys.argv[6:]:
+                old, new = (x.encode('latin-1') + bytes(1) for x in pair.split('=', 1))
+                o = struct.pack('<I', len(old)) + old
+                if code.count(o) != 1:
+                    raise SystemExit(f'{pair}: {code.count(o)} copies in {sys.argv[5]}')
+                code = code.replace(o, struct.pack('<I', len(new)) + new)
+            return code
+        edit_script(*sys.argv[2:6], swap)
+        print(f'{sys.argv[5]}: {len(sys.argv) - 6} string(s) swapped')
+    elif sys.argv[1] == 'igcpaks':  # <qb.pak> <qb.pab>
+        igc_paks(*sys.argv[2:4])
+    elif sys.argv[1] == 'zonescript':  # <zone or mission .pak.psp> <script> <qbc source, \n between lines>
+        zone_script(sys.argv[2], sys.argv[3], sys.argv[4].replace(chr(92) + 'n', chr(10)))
     elif sys.argv[1] == 'zonerekey':  # <zone .pak.psp> <script> <old> <new>
         zone_rekey(*sys.argv[2:6])
     elif sys.argv[1] == 'missions':
