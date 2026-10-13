@@ -1244,3 +1244,17 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   thps6_human, 50). Different skeletons and anim formats (P8 compressed q48/t48 keys): THUG2 skater
   anims would need retargeting and re-encoding. Project Mod's airtricks.qb grew 468 -> 1356 lines
   (trick lists) on P8's own animations.
+
+### Research: characters in vanilla P8 and Project Mod (no changes made)
+
+- Vanilla P8's datap already has THAW story character models (loose .skin.psp): ped_mindy (+_full,
+  _xen), ped_iggy body/head, ped_boone (+full, legs, underwear), ped_murphy (+full), ped_mega,
+  ped_barber, ped_cholo/cholo2, ped_clover, gped_bum, gped_dad. The Hollywood goal peds use
+  Ped_DVGuy/Ped_HippieF01 stand-ins only because the zone does not load these: real models are a
+  matter of loading them and pointing THAW's profiles at them (PedParts budget applies).
+- Project Mod adds 765 .skin.psp vanilla lacks: secret skaters (skater_barker, billyjoe, butterbody/
+  heads, clover, cod, cutchemist, eddie, jango, jenna, jimbo, liljohn, shrek, sk8hand, skaboto),
+  THUG2 story characters (nigel_full, phil_full/gagged, paulie_full, ped_jordan, cut_bodyguard_full),
+  THUG2 ped sets (ped_male\barcelona, skatopia, australia, boston, ...), ~100 GameObject props
+  (GameObjects\THUG, THUG2, THUG2Remix) and 578 THAW CAS textures (tex\models\skater_male_aw).
+  All in P8 PSP format; usable on our build with the mod's profile/select scripts.
