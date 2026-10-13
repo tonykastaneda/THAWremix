@@ -254,10 +254,22 @@ def start(game):
     for _ in range(60):
         try:
             WS().s.close()
-            return 'started'
+            break
         except OSError:
             time.sleep(0.5)
-    raise RuntimeError('debugger did not come up')
+    else:
+        raise RuntimeError('debugger did not come up')
+    for _ in range(60):  # the debugger answers before the game runs; inputs then fail ("CPU not started")
+        try:
+            ws = WS()
+            st = ws.call({'event': 'cpu.status'})
+            ws.s.close()
+            if st.get('ticks'):
+                return 'started'
+        except (OSError, RuntimeError):
+            pass
+        time.sleep(0.5)
+    raise RuntimeError('the game did not start')
 
 
 def register():

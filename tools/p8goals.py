@@ -279,6 +279,9 @@ def zone_rekey(pak_path, script, old, new):
 KEEP = {'.qb', '.nqb', '.sqb'}
 
 
+MISSION_NO_SPAWN = ('Vehicle', 'GameObject')
+
+
 def missions(thaw_data, out, empty_level, prefixes):
     level = open(empty_level, 'rb').read()
     if not qb.NAMES:  # key names, to find 'profile' fields (extracted/dbg, as qb.py's own main)
@@ -302,6 +305,16 @@ def missions(thaw_data, out, empty_level, prefixes):
                 for pr in profs:
                     to = 'Ped_HippieF01' if 'mindy' in pr.lower() else 'Ped_DVGuy'
                     d0 = d0.replace(struct.pack('<I', p8qb.key(pr)), struct.pack('<I', pak.qbkey(to)))
+                if pak.EXT.get(e['type']) == '.nqb':
+                    # THAW vehicles and GameObjects name models P8 does not have (the dropped .mdl
+                    # entries): created, they crash scene setup (Whofleck's limo, module 0xae670)
+                    try:
+                        d1, n_off = p8zone.unspawn(d0, part, MISSION_NO_SPAWN)
+                    except KeyError:
+                        d1, n_off = d0, 0
+                    if n_off:
+                        d0, profs = d1, profs or {'unspawned'}
+                        print(f'{part}: {n_off} vehicle/GameObject CreatedAtStart flags off')
                 if profs:
                     payloads[i] = d0
             d = bytearray(p8zone.write_pak(src, payloads, drop))

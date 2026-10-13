@@ -144,7 +144,8 @@ def unspawn(data, zone, no_spawn=NO_SPAWN):
     items = top_items(bytes(data))
     shared = {k: v for k, (t, v) in items.items() if t == 10}
     arr = items[qbkey(f'{zone}_NodeArray')][1]
-    n, base = u(arr + 4), u(arr + 8)
+    n = u(arr + 4)
+    base = arr + 8 if n == 1 else u(arr + 8)  # a one-element array holds it inline
     cls_key, type_key, cas = qbkey('Class'), qbkey('Type'), qbkey('CreatedAtStart')
     # entries are a class, or class:type for one type of it (e.g. GameObject:Ghost)
     classes = {(qbkey(c.split(':')[0]), qbkey(c.split(':')[1]) if ':' in c else None) for c in no_spawn}
@@ -181,7 +182,8 @@ def create(data, zone, classes):
     items = top_items(bytes(data))
     shared = {k: v for k, (t, v) in items.items() if t == 10}
     arr = items[qbkey(f'{zone}_NodeArray')][1]
-    n, base = u(arr + 4), u(arr + 8)
+    n = u(arr + 4)
+    base = arr + 8 if n == 1 else u(arr + 8)  # a one-element array holds it inline
     want = {(qbkey(c.split(':')[0]), qbkey(c.split(':')[1]) if ':' in c else None) for c in classes}
     absent, cas, done = qbkey('AbsentInNetGames'), qbkey('CreatedAtStart'), 0
     for i in range(n):

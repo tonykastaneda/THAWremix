@@ -5,6 +5,7 @@
   p8qb.py swapscript <qb.pak.psp> <qb.pab.psp> <file> <script> <donor .qb>   (also rewrites the .pak)
   p8qb.py extract <qb.pak.psp> <qb.pab.psp> <file> <out .qb>
   p8qb.py rekey <qb.pak.psp> <qb.pab.psp> <file> <script> <old> <new>   (packed or not; stored unpacked)
+  p8qb.py rekeyall <qb.pak.psp> <qb.pab.psp> <file> <old> <new>   (rekey in every script holding it)
   p8qb.py setglobal <qb.pak.psp> <qb.pab.psp> <file> <name> <int or key>
   p8qb.py copyfield <qb.pak.psp> <qb.pab.psp> <file> <dst struct> <dst field> <src struct> <src field>
   p8qb.py setdata <qb.pak.psp> <qb.pab.psp> <file> <old>=<new> [int:<old>=<new>] [str:<Old>=<New> ...]
@@ -66,6 +67,10 @@ def setdata(pakp, pabp, fname, *pairs):
     e = next(e for e in ents if e['name'].lower().endswith(fname.lower()))
     start = e['offset'] - len(p)
     d = bytearray(b[start:start + e['size']])
+    # never inside a script body: those are often LZSS-packed, and changing bytes there corrupts
+    # the code when it is unpacked (a boot crash, 0x088ca734, when a goal key landed in one)
+    import qb
+    scripts = [(v[1], v[1] + v[3]) for _, v in qb.QB(bytes(d)).items() if isinstance(v, tuple) and v[:1] == ('script',)]
     for pair in pairs:
         old, new = pair.split('=', 1)
         if old.startswith('int:'):
@@ -77,11 +82,17 @@ def setdata(pakp, pabp, fname, *pairs):
             n = n.ljust(len(o), b'\0')
         else:
             o, n = struct.pack('<I', key(old)), struct.pack('<I', key(new))
-        count = d.count(o)
+        count, skipped, i = 0, 0, d.find(o)
+        while i >= 0:
+            if any(a <= i < z for a, z in scripts):
+                skipped += 1
+            else:
+                d[i:i + len(o)] = n
+                count += 1
+            i = d.find(o, i + len(o))
         if not count:
-            raise SystemExit(f'{old} not in {e["name"]}')
-        d = d.replace(o, n)
-        print(f'{e["name"]}: {old} -> {new} ({count})')
+            raise SystemExit(f'{old} not in {e["name"]} (outside scripts)')
+        print(f'{e["name"]}: {old} -> {new} ({count}' + (f'; {skipped} in script bodies left alone)' if skipped else ')'))
     b[start:start + e['size']] = d
     open(pabp, 'wb').write(b)
 
@@ -389,6 +400,25 @@ def rekey(pakp, pabp, fname, script, old, new):
     print(f'{e["name"]} {script}: {old} -> {new} ({count}), stored unpacked, file moved to the end of the pab')
 
 
+def rekeyall(pakp, pabp, fname, old, new):
+    """One checksum swapped in every script of a file that holds it (rekey each: unpacked, edited,
+    stored unpacked); a byte swap inside a packed body corrupts it."""
+    p, b = open(pakp, 'rb').read(), open(pabp, 'rb').read()
+    e = next(e for e in pak.read_entries(p)[0] if e['name'].lower().endswith(fname.lower()))
+    d = b[e['offset'] - len(p):e['offset'] - len(p) + e['size']]
+    o = struct.pack('<I', key(old))
+    hits = []
+    for _, t, k, v in pointer_sites(d)[1]:
+        if t == 7:
+            usz, csz = struct.unpack_from('<2I', d, v + 4)
+            if o in body(d, v + 12, usz, csz):
+                hits.append(k)
+    if not hits:
+        raise SystemExit(f'{old} in no script of {fname}')
+    for k in hits:
+        rekey(pakp, pabp, fname, '0x%08x' % k, old, new)
+
+
 def setglobal(pakp, pabp, fname, name, value):
     """A top-level integer (or checksum) value, rewritten in its item header."""
     p, b = open(pakp, 'rb').read(), bytearray(open(pabp, 'rb').read())
@@ -434,6 +464,8 @@ def main():
         return compact(*sys.argv[2:4])
     if sys.argv[1] == 'rekey':
         return rekey(*sys.argv[2:8])
+    if sys.argv[1] == 'rekeyall':
+        return rekeyall(*sys.argv[2:7])
     if sys.argv[1] == 'setglobal':
         return setglobal(*sys.argv[2:7])
     if sys.argv[1] == 'copyfield':

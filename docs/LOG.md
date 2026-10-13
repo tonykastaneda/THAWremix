@@ -1203,3 +1203,23 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   along its own normal. Hollywood at 1.0 in: 7,067 vertices in 539 meshes; size and collision
   unchanged. PPSSPP, story start: a red poster on the shop wall (shop_stickers) that lost to the wall
   now shows. The default level is rebuilt with it (old one: work/p8mod/ho/z_sc.nolift.psp_level).
+
+### Hollywood story through the dinosaur head (the user's scope, 2026-10-12)
+
+- Missions -> THAW atoms/goals: Change Your Look gaps15 (barber), Change Your Clothes gaps30, Learn to
+  Caveman counter (+ red ropes gaps40, follow my line), Sponsor Challenge gaps31, Kickflip Whofleck
+  gaps2, Learn to Revert counter4, Get Your Stuff Back gaps5 ("Beat down the punk skater"), Stop the
+  wool protest highcombo (unlock_bh), then HO_LevelEvent_Dino (the dinosaur head falls).
+- PPSSPP with P8V_TESTGOAL: gaps31 reaches the skate shop door ("Press O to look at stat challenges";
+  the menu not seen yet), counter4 runs (revert instructions, timer), gaps5 runs (Joe Skater vs You
+  score race), highcombo runs on the dinosaur roof, gaps2 runs after the fixes below ("Failed! Out of
+  time!" when left alone). Whofleck's limo is not there (vehicle models not converted).
+- Test aid bug: P8V_TESTGOAL used `p8qb setdata`, which swapped the goal key's bytes everywhere,
+  also inside LZSS-packed script bodies (chapter_info's atoms are built by scripts) and corrupted
+  them for some keys (gaps2: boot-time crash 0x088ca734). `p8qb setdata` now skips script bodies;
+  `p8qb rekeyall` rekeys (unpack, swap, store unpacked) every script holding a key; P8V_TESTGOAL uses it.
+- Whofleck crash (scene setup, 0x088b2670): its mission paks create a Limo Vehicle and a Ghost
+  GameObject whose models were dropped. `p8goals missions` now turns their CreatedAtStart off
+  (MISSION_NO_SPAWN Vehicle, GameObject): 14 Hollywood mission paks. p8zone.unspawn/create read a
+  one-node array's node inline. Mission paks are cached in work/p8v/missions_out (delete to rebuild).
+- ppsspp_ws.start waits for the CPU to run before returning (inputs failed with "CPU not started").
