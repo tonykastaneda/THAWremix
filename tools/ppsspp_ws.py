@@ -161,6 +161,27 @@ def kill():
         os.remove(PIDFILE)
     except OSError:
         pass
+    trim_log()
+
+
+LOG_CAP = 20 << 20  # a crash loop logs ~1 GB a minute; keep only the end
+
+
+def trim_log():
+    log = os.path.join(os.path.dirname(EXE), 'ppsspp.log')
+    for _ in range(20):
+        try:
+            if os.path.getsize(log) > LOG_CAP:
+                with open(log, 'rb') as f:
+                    f.seek(-LOG_CAP, 2)
+                    tail = f.read()
+                with open(log, 'wb') as f:
+                    f.write(tail)
+            return
+        except FileNotFoundError:
+            return
+        except PermissionError:  # the killed emulator can hold it for a moment
+            time.sleep(0.5)
 
 
 WATCHDOG = r'''
