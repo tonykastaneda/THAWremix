@@ -302,8 +302,9 @@ def missions(thaw_data, out, empty_level, prefixes):
                     continue
                 d0 = blob[e['offset']:e['offset'] + e['size']]
                 profs = set(re.findall(r"'profile', '\$([^']+)'", repr(qb.QB(d0).items())))
+                known = {k.lower(): v for k, v in p8zone.PROFILES.items()}
                 for pr in profs:
-                    to = 'Ped_HippieF01' if 'mindy' in pr.lower() else 'Ped_DVGuy'
+                    to = known.get(pr.lower()) or ('Ped_HippieF_FullBody04' if 'mindy' in pr.lower() else 'Ped_DVGuy')
                     d0 = d0.replace(struct.pack('<I', p8qb.key(pr)), struct.pack('<I', pak.qbkey(to)))
                 if pak.EXT.get(e['type']) == '.nqb':
                     # THAW vehicles and GameObjects name models P8 does not have (the dropped .mdl
@@ -363,6 +364,9 @@ def main():
         node_flags(*sys.argv[2:4])
     elif sys.argv[1] == 'storyflags':
         story_flags(*sys.argv[2:4])
+    elif sys.argv[1] == 'pedparts':  # <qb.pak> <qb.pab> <size>: Houses' PedParts heap only
+        edit_script(*sys.argv[2:4], 'game' + chr(92) + 'levels.qb.psp', 'load_level', int_once(401472, int(sys.argv[4])))
+        print(f'PedParts (Houses) {sys.argv[4]}')
     elif sys.argv[1] == 'heaps':  # <qb.pak> <qb.pab> <COIM> <PedParts> <AnimHeap>
         heaps(*sys.argv[2:4], *map(int, sys.argv[4:7]))
     elif sys.argv[1] == 'zonerekey':  # <zone .pak.psp> <script> <old> <new>

@@ -124,14 +124,30 @@ NO_SPAWN = ('Pedestrian', 'Vehicle')
 
 # THAW ped profiles P8's profile_ped.qb lacks (a ped node naming one crashes ped creation: its
 # StructureContains reads the bare checksum as a struct), and THAW's Hollywood profiles (z_ho_peds.qb),
-# whose parts (Ped_GenericSkater_*, ...) come from THAW's z_hoped pak, which P8 does not load. Only P8
-# profiles whose parts this zone has: Ped_HippieF01 and Ped_DVGuy (Houses' own); ped_Skater_02 crashed
-# (its parts are not loaded here).
-PROFILES = {'Ped_Mindy': 'Ped_HippieF01', 'Ped_ShopOwner': 'Ped_DVGuy', 'Ped_SurPlus': 'Ped_DVGuy',
-            'Z_HO_ped_Skater_02': 'Ped_DVGuy', 'Z_HO_ped_Skater_03': 'Ped_DVGuy', 'Z_HO_ped_Skater_03_skatelogic': 'Ped_DVGuy',
-            'Z_HO_Ped_FatConstruction': 'Ped_DVGuy', 'Z_HO_ped_bum_01': 'Ped_DVGuy', 'Z_HO_Ped_FallingDown': 'Ped_DVGuy',
-            'Z_HO_Ped_Asshole': 'Ped_DVGuy', 'Z_HO_Ped_Asshole_Roaming': 'Ped_DVGuy', 'Ped_MexicanGraffiti': 'Ped_DVGuy',
-            'Z_HO_ped_hippie_01': 'Ped_HippieF01', 'Z_HO_Pro_Reynolds': 'Ped_DVGuy', 'Ped_BMX': 'Ped_DVGuy'}
+# whose parts come from THAW's z_hoped pak, which P8 does not load. THAW names P8 also has (Ped_Barber,
+# ped_boone, ped_murphy, Pro_Rick_Thorne, Ped_BMX, ...) stay as they are.
+PROFILES = {
+    # THAW's own characters as P8 profiles whose parts exist (P8 PSP's part lists name many models the
+    # disc lacks): Mindy / the Barber / Boone through full-body profiles repointed at their own loose
+    # models (REPOINT), Murphy as he is; everyone else the DV guy. Project Mod's generic skater parts
+    # (ped_Skater_02/03) are a newer model format (header word 0x80, vanilla 0x60): loading them
+    # crashes P8 (0x0899335c), so the skater peds stay DV guys
+    'Z_HO_ped_Skater_02': 'Ped_DVGuy', 'Z_HO_ped_Skater_03': 'Ped_DVGuy',
+    'Z_HO_ped_Skater_03_skatelogic': 'Ped_DVGuy', 'Z_HO_Pro_Reynolds': 'Ped_DVGuy',
+    'Pro_Rick_Thorne': 'Ped_DVGuy', 'Z_HO_Ped_Asshole': 'Ped_DVGuy', 'Z_HO_Ped_Asshole_Roaming': 'Ped_DVGuy',
+    'Ped_Mindy': 'Ped_HippieF_FullBody04', 'Ped_Barber': 'Ped_HippieF_FullBody03', 'ped_boone': 'Ped_HippieF_FullBody02',
+    'Z_HO_ped_bum_01': 'Ped_DVGuy', 'Z_HO_Ped_FatConstruction': 'Ped_DVGuy', 'Z_HO_Ped_FallingDown': 'Ped_DVGuy',
+    'Ped_MexicanGraffiti': 'Ped_DVGuy', 'Ped_ShopOwner': 'Ped_DVGuy', 'Ped_SurPlus': 'Ped_DVGuy',
+    'Z_HO_ped_hippie_01': 'Ped_DVGuy'}
+# cas_ped_m mesh paths repointed (p8qb setstr): P8's ped board path is not on the disc; three full-body
+# protester profiles (their models are not on the disc either) become Mindy, the Barber and Boone
+REPOINT = (('models/ped_male/Ped_Skateboard.skin', 'models/peds/ped_skateboards/ped_skateboard_01.skin'),
+           ('models/peds/Ped_Protester_FullBody/Ped_HippieF_FullBody04.skin', 'models/peds/ped_mindy/ped_mindy_full.skin'),
+           ('models/peds/Ped_Protester_FullBody/Ped_HippieF_FullBody03.skin', 'models/peds/ped_barber/ped_barber.skin'),
+           ('models/peds/Ped_Protester_FullBody/Ped_HippieF_FullBody02.skin', 'models/peds/ped_boone/ped_boone_full.skin'))
+# the Houses slot's ped pak: every profile the zone's and missions' peds can name after PROFILES
+PED_PAK = ('Ped_DVGuy', 'Ped_HippieF_FullBody02', 'Ped_HippieF_FullBody03', 'Ped_HippieF_FullBody04', 'ped_murphy',
+           'Ped_BMX')
 
 
 def unspawn(data, zone, no_spawn=NO_SPAWN):

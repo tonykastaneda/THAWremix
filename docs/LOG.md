@@ -1271,3 +1271,24 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   P8V_P8PHYSICS=1 keeps P8's.
 - PPSSPP, story start, side by side: rolling, P8's camera sits on the skater, THUG2's is back at
   normal distance; nose manual: P8 zooms right in, THUG2's camera stays where it was.
+
+### Real THAW characters for the goal peds (Hollywood's own ped pak)
+
+- P8 builds peds only from parts in the level's ped pak (worlds\worldzones\z_houses\z_housesped.pak,
+  loaded into the PedParts heap; Houses' holds DV guy + P8 goal peds). P8 PSP's part lists
+  (cas_ped_m/f, profile_ped) name many models the disc lacks (generic skater parts, bums, pros,
+  protesters, even models/ped_male/Ped_Skateboard). On the disc: loose ped_mindy(_full), ped_barber,
+  ped_boone(_full), ped_murphy, ped_skateboards. Project Mod adds generic skater parts and SI_BMX,
+  but its skater parts are a newer model format (header word 0x80; vanilla 0x60) and crash P8.
+- `tools/p8pedpak.py` builds a ped pak for a list of profiles: part = .stex (key qbkey(<mesh less
+  .skin>.tex)) + .skin (key qbkey(<mesh>), parent field = its .stex key: copying the template's
+  parent crashed loading, 0x0899335c), parts from P8's ped paks, loose datap models, or `--also`
+  another archive. `p8zone.REPOINT` (p8qb setstr on cas_ped_m) points the board at
+  ped_skateboard_01 and the full-body protester profiles 04/03/02 at Mindy, the Barber and Boone;
+  `p8zone.PROFILES` maps THAW's Ped_Mindy, Ped_Barber, ped_boone to them; ped_murphy is P8's own;
+  everyone else (skaters, bums, pros, protesters, shop owners) stays the DV guy.
+- The ped pak's own zone_sizes_psp entry (z_housesped 0x33802d55, 399,920) must be its size: a bigger
+  pak overran the space set aside (same crash). PedParts on the PSP-1000 build: 802,944 (pak 445,664
+  for DVGuy, Mindy, Barber, Boone, Murphy, BMX: 356 KB free).
+- PPSSPP: standard route, no faults; gaps12's start: Mindy in her own model beside the skater
+  ("Mindy: O to talk").
