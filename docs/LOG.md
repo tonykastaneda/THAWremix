@@ -1138,3 +1138,6 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   path the shipped game always skips, and three of the movies are ours (pmfmux, ATRAC3plus). New:
   `P8V_NOINTRO=1` (unpatched executable, as shipped) -> work/iso/C THAW P8 no intro.iso (PPSSPP: reaches
   Hollywood). On the PSP: B (P8's own movies with the patch) and C tell the intro path from the rest.
+- PSP-3000: C (no intro) works. So the hardware crash is in the intro path (B, P8's own movies with
+  the patch, still to report). work/iso/D THAW P8 big test (no intro).iso: P8V_NOINTRO + P8V_BIG with
+  every non-pigeon ped on (PPSSPP as PSP-2000: reaches Hollywood).
