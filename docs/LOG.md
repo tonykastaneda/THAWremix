@@ -1178,3 +1178,8 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   20 s in (stale path). The ppsspp_ws log cap (20 MB on kill) came from a crash loop writing 1.8 GB.
 - User reports to fix next: the dinosaur building is missing (NODEFLAG_Z_HO_DINO_BEFORE/AFTER pieces),
   and floor z-fighting between the bleachers across the street from the theater entrance.
+- **Grinding confirmed in PPSSPP** (no PSP needed): `P8V_TESTGOAL=z_ho_goal_gaps40` opens the story at
+  "Grind the red ropes" with the skater on the board beside the ropes; stick forward, a little left,
+  ollie, triangle: BS 50-50 on a rope with the balance meter, 247-point combo, the goal wins and
+  "Follow my line" starts. Teleporting by writing memory was unreliable (a "position" copy was the
+  velocity); starting at a goal's restart node is the dependable way to put the skater somewhere.
