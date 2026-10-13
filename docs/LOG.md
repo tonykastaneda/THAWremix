@@ -1372,3 +1372,15 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   Hair -> P8's styles (Short Mohawk, Long Mohawk, Devillock...) change the model live -> DONE -> goal
   won, "Change your clothes" -> clothing door -> Circle -> Shirt (Baseball T) and Pants (Cargo Pants)
   live -> DONE -> save prompt -> skating with the new look, input back.
+
+### Joey B. (dino head seller, story mission 8) in THAW's model
+
+- Hollywood's node profiles: the story goal givers still on the DV guy were Joey B. (Gap23 "Buy the
+  dino head", Z_HO_Ped_FatConstruction) and the cop-car bank drop's FallingDown guy (gaps13, not a
+  story step). THAW builds Joey from two parts (Ped_FatConstruction + _HEAD).
+- `thaw2p8skin.py --also <skin>...` merges more THAW parts into one P8 skin (same skeleton); `p8zone.MERGE`
+  lists them and work/p8v/build.py passes them. P8's last unused full-body protester profile
+  (Ped_HippieF_FullBody01) is repointed at the merged model (81 KB) and Z_HO_Ped_FatConstruction maps to it.
+- Ped pak 960,608 bytes: the PSP-1000 PedParts heap goes from 928 KB to 1 MB (TopDown had ~696 KB free).
+- PPSSPP (P8V_TESTGOAL=z_ho_goal_gaps23): "Buy the dino head $200" dialog; Joey B. stands by the
+  skater ("Joey B.: O to talk") in THAW's look (work pants, tool belt, brown jacket).

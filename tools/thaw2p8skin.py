@@ -1,6 +1,7 @@
 """THAW (PC) skinned model -> Project 8 PSP skin (.skin.psp).
 
   thaw2p8skin.py <THAW .skin.wpc> <out .skin.psp> [--name <file name>] [--tex 64] [--palette 8]
+                 [--also <THAW .skin.wpc> ...]   (more parts merged in, e.g. a separate head)
 
 THAW and P8 share the skeleton (thps7_human), so only the format changes:
   THAW skinned vertex (40 bytes, mesh +0x26 = weight count): position 3 floats (inches, Y up) at 0,
@@ -204,8 +205,13 @@ def material_words(tex, vt_next):
     return w
 
 
-def convert(src, out, name=None, max_side=64, palette_max=8):
+def convert(src, out, name=None, max_side=64, palette_max=8, also=()):
     materials, textures, meshes = read_thaw_skin(src)
+    for extra in also:  # same skeleton: the parts' meshes just add up
+        m2, t2, ms2 = read_thaw_skin(extra)
+        materials.update(m2)
+        textures.update(t2)
+        meshes += ms2
     tb = thaw2psp.TexBlock(max_side)
     recs, dl, verts = [], bytearray(ge(0x10) + ge(0x0B)), bytearray()
     radius, max_bone = 0.0, 0
@@ -275,5 +281,6 @@ if __name__ == '__main__':
     ap.add_argument('--name')
     ap.add_argument('--tex', type=int, default=64)
     ap.add_argument('--palette', type=int, default=8)
+    ap.add_argument('--also', nargs='*', default=[])
     a = ap.parse_args()
-    convert(a.src, a.out, a.name, a.tex, a.palette)
+    convert(a.src, a.out, a.name, a.tex, a.palette, a.also)

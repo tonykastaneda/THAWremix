@@ -135,17 +135,24 @@ PROFILES = {
     'Z_HO_Ped_Asshole': 'ped_SkaterSelect_vato', 'Z_HO_Ped_Asshole_Roaming': 'ped_SkaterSelect_vato',
     'Z_HO_ped_bum_01': 'Ped_Bum01',
     'Ped_Mindy': 'Ped_HippieF_FullBody04', 'Ped_Barber': 'Ped_HippieF_FullBody03', 'ped_boone': 'Ped_HippieF_FullBody02',
-    'Z_HO_Ped_FatConstruction': 'Ped_DVGuy', 'Z_HO_Ped_FallingDown': 'Ped_DVGuy',
+    'Z_HO_Ped_FatConstruction': 'Ped_HippieF_FullBody01', 'Z_HO_Ped_FallingDown': 'Ped_DVGuy',
     'Ped_MexicanGraffiti': 'Ped_DVGuy', 'Ped_ShopOwner': 'Ped_DVGuy', 'Ped_SurPlus': 'Ped_DVGuy',
     'Z_HO_ped_hippie_01': 'Ped_DVGuy'}
 # cas_ped_m mesh paths repointed (p8qb setstr): P8's ped board path is not on the disc; three full-body
-# protester profiles (their models are not on the disc either) become Mindy, the Barber and Boone
+# protester profiles (their models are not on the disc either) become Mindy, the Barber, Boone and the
+# construction worker who sells the dino head (FullBody01)
 REPOINT = (('models/ped_male/Ped_Skateboard.skin', 'models/peds/ped_skateboards/ped_skateboard_01.skin'),
            ('models/peds/Ped_Protester_FullBody/Ped_HippieF_FullBody04.skin', 'models/peds/ped_mindy/ped_mindy_full.skin'),
            ('models/peds/Ped_Protester_FullBody/Ped_HippieF_FullBody03.skin', 'models/peds/ped_barber/ped_barber.skin'),
-           ('models/peds/Ped_Protester_FullBody/Ped_HippieF_FullBody02.skin', 'models/peds/ped_boone/ped_boone_full.skin'))
+           ('models/peds/Ped_Protester_FullBody/Ped_HippieF_FullBody02.skin', 'models/peds/ped_boone/ped_boone_full.skin'),
+           ('models/peds/Ped_Protester_FullBody/Ped_HippieF_FullBody01.skin',
+            'models/peds/ped_FatConstruction/Ped_FatConstruction.skin'))
+# THAW characters made of several parts, merged into the one model a full-body profile names
+# (thaw2p8skin --also): the dino head seller's head
+MERGE = {'models/peds/ped_fatconstruction/ped_fatconstruction.skin':
+         ('models/peds/ped_fatconstruction/ped_fatconstruction_head.skin',)}
 # the Houses slot's ped pak: every profile the zone's and missions' peds can name after PROFILES
-PED_PAK = ('Ped_DVGuy', 'Ped_HippieF_FullBody02', 'Ped_HippieF_FullBody03', 'Ped_HippieF_FullBody04', 'ped_murphy',
+PED_PAK = ('Ped_DVGuy', 'Ped_HippieF_FullBody01', 'Ped_HippieF_FullBody02', 'Ped_HippieF_FullBody03', 'Ped_HippieF_FullBody04', 'ped_murphy',
            'Ped_BMX', 'ped_Skater_02', 'ped_Skater_03', 'Pro_Reynolds', 'Pro_Rick_Thorne', 'Ped_Bum01',
            'ped_SkaterSelect_vato')
 
