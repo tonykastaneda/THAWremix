@@ -184,9 +184,10 @@ def ge(cmd, arg=0):
     return struct.pack('<I', cmd << 24 | (arg & 0xFFFFFF))
 
 
-def material_words(tex, vt_next):
+def material_words(tex, vt_next, cutout=False):
     """P8's per-material state block (as its own skins: CLUT4, mips, alpha test), ending in the
-    next draw's VTYPE and RET."""
+    next draw's VTYPE and RET. cutout: alpha test on (texels under alpha 2 dropped), for textures
+    that cut shapes out with alpha (THAW's sleeveless shirts' armholes)."""
     lv = tex['levels']
     w = ge(0x10) + ge(0xCB) + ge(0xB0, tex['clut']) + ge(0xB1) + ge(0xC4, 2)
     for i in range(4):
@@ -199,32 +200,40 @@ def material_words(tex, vt_next):
         w += ge(0xB8 + i, (lw.bit_length() - 1) | (lh.bit_length() - 1) << 8)
     w += ge(0xC2, (len(lv) - 1) << 16 | 1)
     w += (ge(0x1E, 1) + ge(0x17, 1) + ge(0xC9, 0x010100) + ge(0x21) + ge(0x1D) + ge(0xC0) + ge(0x5B) + ge(0x57)
-          + ge(0xC6, 0x107 if len(lv) > 1 else 0x101) + ge(0x22) + ge(0xDB, 0xFF0207) + ge(0xCF, 0x0080A0)
+          + ge(0xC6, 0x107 if len(lv) > 1 else 0x101) + ge(0x22, int(cutout)) + ge(0xDB, 0xFF0207) + ge(0xCF, 0x0080A0)
           + ge(0xC7) + ge(0x48, 0x430000) + ge(0x49, 0x430000) + ge(0x4A, 0xC30000) + ge(0x4B, 0xC30000)
           + ge(0x47, 0x46FFDC) + ge(0x12, vt_next) + ge(0x0B))
     return w
 
 
-def convert(src, out, name=None, max_side=64, palette_max=8, also=()):
+def convert(src, out, name=None, max_side=64, palette_max=8, also=(), retex=None):
+    """retex: {texture checksum (qbkey of THAW's png name): THAW .img.wpc} baked in place of that
+    texture (THAW's CAS 'replace' / 'with' variants of one mesh become skins of their own)."""
     materials, textures, meshes = read_thaw_skin(src)
     for extra in also:  # same skeleton: the parts' meshes just add up
         m2, t2, ms2 = read_thaw_skin(extra)
         materials.update(m2)
         textures.update(t2)
         meshes += ms2
+    for cks, img in (retex or {}).items():
+        (rgba, comp), = ts.parse_tex(bytes(8) + open(img, 'rb').read()).values()
+        textures[cks] = (rgba, comp)
     tb = thaw2psp.TexBlock(max_side)
     recs, dl, verts = [], bytearray(ge(0x10) + ge(0x0B)), bytearray()
     radius, max_bone = 0.0, 0
     for m in meshes:
         rec = materials.get(m['material'])
         tcks = struct.unpack_from('<I', rec, 0x40)[0] if rec else 0
-        tex = tb.add(tcks, textures[tcks][0]) if tcks in textures else tb.add('white', thaw2psp.white_texture())
+        alpha = textures[tcks][0][:, :, 3] if tcks in textures else None
+        cutout = alpha is not None and bool((alpha < 128).any() and (alpha >= 128).any())
+        tex = (tb.add(tcks, textures[tcks][0], cutout=cutout) if tcks in textures else
+               tb.add('white', thaw2psp.white_texture()))
         groups = ([(p, [('tris', t)]) for p, t in draws(m, palette_max)] if m['strip'] is None else
                   [(p, [('strip', r) for r in rs]) for p, rs in strip_draws(m, palette_max)])
         for pal, items in groups:
             vt = vtype(len(pal))
             recs.append((1, len(dl), m['material'], 0, 0x808080))
-            dl += material_words(tex, vt)
+            dl += material_words(tex, vt, cutout)
             recs.append((4, len(dl), tcks, 0, 0))
             dl += ge(0x10) + ge(0x0B)
             recs.append((2, len(dl), 0, len(verts), 0))

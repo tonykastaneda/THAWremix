@@ -74,6 +74,30 @@ def quantize16(rgba):
     return pal, index
 
 
+def quantize15_cutout(rgba):
+    """quantize16 for alpha cutouts: 15 opaque colours from the texels at alpha >= 128 and entry 15
+    fully transparent (what the GE's alpha test drops); the index function thresholds alpha at 128."""
+    opaque = rgba[rgba[:, :, 3] >= 128][:, :3]
+    if len(opaque) == 0:
+        opaque = np.zeros((1, 3), np.uint8)
+    im = Image.fromarray(opaque.reshape(1, -1, 3), 'RGB')
+    q = im.quantize(colors=15, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
+    rgb = np.array(q.getpalette()[:45], np.uint8).reshape(-1, 3)
+    pal = np.zeros((16, 4), np.uint8)
+    pal[:len(rgb), :3], pal[:len(rgb), 3] = rgb, 255
+    if len(rgb) < 15:
+        pal[len(rgb):15] = pal[0]
+    palf = pal[:15, :3].astype(np.int32)
+
+    def index(img):
+        px = img.reshape(-1, 4).astype(np.int32)
+        d = ((px[:, None, :3] - palf[None, :, :]) ** 2 * np.array([2, 3, 1])).sum(-1)
+        out = d.argmin(1).astype(np.uint8)
+        out[px[:, 3] < 128] = 15
+        return out.reshape(img.shape[:2])
+    return pal, index
+
+
 def pow2_floor(n):
     p = 1
     while p * 2 <= n:
@@ -95,7 +119,8 @@ class TexBlock:
         self.data += bytes(-len(self.data) % 16)
         return off
 
-    def add(self, key, rgba, max_side=None):
+    def add(self, key, rgba, max_side=None, cutout=False):
+        """cutout: alpha is a cut-out mask (alpha tested): palette entry 15 transparent."""
         if key in self.entries:
             return self.entries[key]
         h, w = rgba.shape[:2]
@@ -103,7 +128,7 @@ class TexBlock:
         scale = min(1.0, (max_side or self.max_side) / max(tw, th))
         tw, th = max(8, int(tw * scale)), max(8, int(th * scale))
         img = np.array(Image.fromarray(rgba, 'RGBA').resize((tw, th), Image.Resampling.BOX))
-        pal, index = quantize16(img)
+        pal, index = quantize15_cutout(img) if cutout else quantize16(img)
         clut = self._put(pal.tobytes())
         levels = []
         lw, lh, cur = tw, th, img

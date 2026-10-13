@@ -30,6 +30,18 @@ def load_names(dbg_root):
                     NAMES[int(k, 16)] = v
 
 
+def script_end(d, o):
+    """End of a script stored as plain tokens (a struct field's script in P8 PSP files, placed right
+    after the field): through its endscript and the newline after it."""
+    import qb2
+    seen = False
+    for p, t, pl in qb2.tokens(d, o):
+        if seen:
+            return p + 1 + len(pl) if t in (0x01, 0x02) else p
+        seen = t == 0x24
+    return len(d)
+
+
 def nm(k):
     return NAMES.get(k, '0x%08x' % k)
 
@@ -83,6 +95,8 @@ class QB:
             return self.array(v)
         if t == 13:
             return '$' + nm(v)
+        if t == 7 and v + 5 <= len(self.d) and self.d[v] in (0x01, 0x02):
+            self.touch(script_end(self.d, v))
         return ('?%d' % t, v)
 
     def struct(self, o):

@@ -1472,3 +1472,35 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   goal starts in gameplay, he stands elsewhere); the converted model's extents match Joey B.'s (72 in
   tall). Hollywood's goal givers are now all THAW models except the DV guy's own goal (gap7, THAW's DV
   guy converted already) and the graffiti-goal taggers (Ped_MexicanGraffiti, peds left unspawned).
+
+### THAW's own CAS parts in the stores (missions 1-2 with THAW's hair and clothes)
+
+- P8 keeps its skater part lists in pak/cas/cas.pak (cas_scripts.qb, loaded at boot; its pak_sizes_psp
+  entry 'cas' = 137,264 is the memory set aside, so it follows the pak's size), one set per body style:
+  cas_punk_hair, cas_punk_torso, cas_punk_legs, cas_punk_head, _hands, _bare_torso, _lower_legs, ...
+  (0x989b60dd: style prefix + part name). Parts are loose models (models/skater_male/*.skin.psp + a
+  4-byte .tex.psp). The THUG2 Remix build never had THAW's parts (it used Remix's CAS as is).
+- P8's and THAW's skaters are built the same way (arms/body, head, hands, bare torso, lower legs, shirt,
+  pants, hair; one skeleton). `tools/p8cas.py` makes the PUNK style THAW's male skater: every model
+  converted (thaw2p8skin, 128 px textures) and added at THAW's own path; THAW's 'replace'/'with'
+  texture variants baked into their own skins (thaw2p8skin `retex`); cas_punk_hair = THAW's 25 male
+  hairs, cas_punk_torso / _legs = what THAW's Hollywood clothing store sells (29 shirts, 15 pants;
+  shorts carry P8's show-legs flag 0x9b421c33), body pieces repointed to Body_M_*; P8's three PUNK
+  presets (0xee5fffac is the style's default) become THAW's appearance_custom_skater_male_01..03.
+  cas.pak 137,264 -> 139,744; 136 loose files (about 2 MB on disc). `work/p8v/build.py` runs it
+  (cached in work/p8v/casout; P8V_P8CAS=1 keeps P8's parts).
+- `p8cas.py` writes QB data in place (typed read/encode, `p8qb.resize`). Every untouched global reads
+  the same afterwards (checked). Found on the way: P8 stores a struct field's script as plain tokens
+  right after the field; qb.py did not count them, so the item walk lost sync after the URBN torso list
+  and resize missed pointers (crash loading Hollywood, null read in FUN_0004ce68, a global array
+  lookup). `qb.script_end` fixes the walk.
+- Converter: alpha cutouts (THAW's frayed sleeveless armholes) drew black: textures with both clear
+  and opaque texels now get the GE alpha test and a palette with entry 15 transparent
+  (thaw2psp.quantize15_cutout).
+- Facial hair is not THAW's yet: THAW's beards are a second texture pass on the head material
+  (the converter keeps one texture per material). Same for jeans logos.
+- PPSSPP: story start as THAW's default skater (mullet, sleeveless); barber Hair lists Bald, Buzzed,
+  Devil Lock, Dead Guy Doo, Mullet, McSqueeb, Mohawk A/B...; choosing Mohawk B puts THAW's red mohawk
+  on; clothing store Shirt (Sleeveless, Sweater ...) and Pants (Jeans Ripped ...) change the model.
+  No faults. Heaps in the barber: skatergeomheap0 271 KB free (was 220 KB with P8's parts), TopDown
+  382 KB free.
