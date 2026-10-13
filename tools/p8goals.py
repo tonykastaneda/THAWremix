@@ -253,6 +253,70 @@ def coim_around_save(pakp, pabp, coim=COIM_SIZE):
     print(f'memcard pools: COIM heap dropped for the save, made again at {coim} bytes after')
 
 
+def zone_script(pak_path, script, source):
+    """One script of a zone pak's <zone>_scripts.qb replaced by compiled source (qbc syntax, the body
+    lines only): qbc's 0x23 <name> .. 0x24 less the leading 0x23 and name, stored unpacked."""
+    import qbc
+    compiled = qbc.compile_source('script ' + script + chr(10) + source + chr(10) + 'endscript' + chr(10))
+    kind, body = compiled[pak.qbkey(script)]
+    assert body[0] == 0x23 and body[1] == 0x16, 'unexpected qbc script header'
+    code = body[6:]
+    ents, blob = p8zone.load_pak(pak_path)
+    zone = os.path.basename(pak_path).lower().split('.')[0]
+    i, e = next((i, e) for i, e in enumerate(ents) if (e['name'] or '').lower().endswith(chr(92) + zone + '_scripts.qb.psp'))
+    d = blob[e['offset']:e['offset'] + e['size']]
+    k = pak.qbkey(script)
+    v, _ = script_code(d, k)
+    d = p8qb.swap_script(d, k, d[v:v + 4] + struct.pack('<2I', len(code), len(code)) + code)
+    out = p8zone.write_pak(pak_path, {i: d})  # read the pak before opening it for writing
+    open(pak_path, 'wb').write(out)
+    print(f'{os.path.basename(pak_path)} {script}: replaced ({len(code)} bytes)')
+
+
+SHOP_DOOR_RADIUS = 160
+
+
+def shop_sources():
+    """The barber and clothing store steps, in THAW's own scripts (their door triggers live in mission
+    collision P8 cannot load, and THAW's shop UI is not in P8): the goal's start script spawns a poll on
+    the skater; within SHOP_DOOR_RADIUS of the shop door (THAW's *_Ext restart node) it shows a prompt,
+    and Circle there (the \m5 glyph) wins the goal. P8 has no in-level Create-A-Skater (no load_cas level:
+    pause_launch_level load_cas freezes the screen in change_level), so the look change itself is still
+    to do (P8's CAS is a front-end screen)."""
+    shops = (('Z_HO_ChangeYourLookWin', 'Z_HO_EnterBarberShop', 'z_ho_goal_gaps15', (-2505.9, 96.2, -2682.9)),
+             ('Z_HO_ChangeYourLookWin2', 'Z_HO_EnterClothingShop', 'z_ho_goal_gaps30', (-2565.2, 95.9, -2030.7)))
+    out = {}
+    for start, poll, goal, door in shops:
+        out[start] = f'skater : Obj_SpawnScript {poll}'
+        out[poll] = f'''<hw_near> = 0
+while
+if not GoalManager_GoalIsActive Name = {goal}
+kill_panel_message_if_it_exists id = hw_shop_hint
+break
+endif
+Obj_GetPosition
+<hw_d> = (<Pos> - ({door[0]}, {door[1]}, {door[2]}))
+if ((<hw_d> . <hw_d>) < {SHOP_DOOR_RADIUS ** 2})
+if (<hw_near> = 0)
+create_panel_message id = hw_shop_hint text = 'Press \\m5 to go in' time = 100000
+endif
+<hw_near> = 1
+if Held Circle
+kill_panel_message_if_it_exists id = hw_shop_hint
+GoalManager_WinGoal Name = {goal}
+break
+endif
+else
+if (<hw_near> = 1)
+kill_panel_message_if_it_exists id = hw_shop_hint
+endif
+<hw_near> = 0
+endif
+wait 1 gameframe
+repeat'''
+    return out
+
+
 def zone_rekey(pak_path, script, old, new):
     """One checksum swapped for another in one script of a zone pak's <zone>_scripts.qb (in place)."""
     ents, blob = p8zone.load_pak(pak_path)
@@ -369,6 +433,9 @@ def main():
         print(f'PedParts (Houses) {sys.argv[4]}')
     elif sys.argv[1] == 'heaps':  # <qb.pak> <qb.pab> <COIM> <PedParts> <AnimHeap>
         heaps(*sys.argv[2:4], *map(int, sys.argv[4:7]))
+    elif sys.argv[1] == 'shops':  # <zone .pak.psp>
+        for name, src in shop_sources().items():
+            zone_script(sys.argv[2], name, src)
     elif sys.argv[1] == 'zonerekey':  # <zone .pak.psp> <script> <old> <new>
         zone_rekey(*sys.argv[2:6])
     elif sys.argv[1] == 'missions':

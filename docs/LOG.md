@@ -1325,3 +1325,20 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   profiles to them (skaters, Reynolds, the jerk skater as Vato, bums). Ped pak 879,504 bytes; PSP-1000
   PedParts 950,272 (928 KB). Standard route: no faults, TopDown free at the end 696,416 (was 1.28 MB).
 - PPSSPP: the caveman lesson's teacher and the punk skater race's "Joe Skater" are THAW's skaters.
+
+### Barber and clothing steps: walk to the door (missions 1-2)
+
+- THAW's flow: the goals' door triggers (mission collision, not loadable on P8) call
+  Z_HO_EnterBarberShop / Z_HO_EnterClothingShop -> Ped_Utils_SetupCASStore (THAW's in-level shop UI,
+  absent on P8), and Z_HO_ChangeYourLookWin checks the look changed.
+- `p8goals.py shops` (zone_script: a zone script replaced by qbc-compiled source, qbc's 0x23 + name
+  dropped; P8 bodies start with a newline token and end in 0x24): the goals' start scripts
+  (Z_HO_ChangeYourLookWin/Win2, already goal_start_script via zonerekey) spawn a poll on the skater
+  (Z_HO_EnterBarberShop/EnterClothingShop, never referenced on P8): within 160 in of THAW's
+  *_Ext door node, "Press \m5 to go in" (\m5 is P8's circle glyph), Circle wins the goal. Replaces
+  the instant pass.
+- PPSSPP: story start at the barber door with the prompt; Circle -> "Change your clothes" at the
+  clothing store door; Circle -> save prompt -> No -> skating, story on.
+- Not yet: the look change. P8 has no load_cas level (pause_launch_level load_cas -> change_level
+  freezes the screen) and no in-level CAS (create_pre_cas_menu is undefined, cas_stores.qb empty);
+  P8's CAS is a front-end screen, so the look change needs a round trip through the front end.
