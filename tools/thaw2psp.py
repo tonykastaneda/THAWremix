@@ -249,10 +249,12 @@ def tessellate(a, b, c, n):
         yield np.array(row)
 
 
-def split_strip(attr, s, max_edge):
+def split_strip(attr, s, max_edge, ground_edge=None):
     """Yields attribute sequences (strips of <= MAX_STRIP vertices) for one THAW strip. Triangles
     with an edge over max_edge (vertex-space units) are tessellated: the PSP rasteriser drops
-    triangles that cross the near plane instead of clipping them, so big ground polygons vanish."""
+    triangles that cross the near plane instead of clipping them, so big ground polygons vanish.
+    ground_edge: a smaller limit for near-horizontal triangles (floors, roads: the camera is always
+    close to them)."""
     a, b, c = s[:-2], s[1:-1], s[2:]
     real = (a != b) & (b != c) & (a != c)
     if not real.any():
@@ -261,7 +263,13 @@ def split_strip(attr, s, max_edge):
     if max_edge:
         e = np.maximum.reduce([np.linalg.norm(P[a] - P[b], axis=1), np.linalg.norm(P[b] - P[c], axis=1),
                                np.linalg.norm(P[a] - P[c], axis=1)])
-        big = real & (e > max_edge)
+        lim = np.full(len(a), float(max_edge))
+        if ground_edge:
+            nz = np.cross(P[b] - P[a], P[c] - P[a])
+            ln = np.linalg.norm(nz, axis=1)
+            flat = np.abs(nz[:, 2]) > 0.8 * np.maximum(ln, 1e-9)  # vertex space: the third axis is up
+            lim[flat] = ground_edge
+        big = real & (e > lim)
     else:
         big = np.zeros(len(a), bool)
     if not big.any():
@@ -277,7 +285,7 @@ def split_strip(attr, s, max_edge):
             k += 1
             continue
         if big[k]:
-            n = int(np.ceil(e[k] / max_edge))
+            n = int(np.ceil(e[k] / lim[k]))
             for row in tessellate(attr[a[k]], attr[b[k]], attr[c[k]], n):
                 yield from chunks(row)
             k += 1
@@ -411,7 +419,7 @@ def lift_decals(meshes, materials, textures, lift, log=print):
 
 
 def build_level(meshes, materials, textures, delta, max_side, tess_len=400, log=print, offset=None, hidden=(),
-                texel=0):
+                texel=0, tess_ground=0):
     tb = TexBlock(max_side)
     sides = texture_sides(meshes, materials, max_side, texel) if texel else {}
     lists = [[GE_RET]]  # word 0: never selected explicitly
@@ -457,7 +465,7 @@ def build_level(meshes, materials, textures, delta, max_side, tess_len=400, log=
         attr = np.concatenate([vs, m.uv, col[:, :3], np.clip(col[:, 3:4] * ascale, 0, 255)], 1)
         far = m.radius > 6000
         for s in m.strips:
-            for seq in split_strip(attr, s, None if far else tess_len * 4):
+            for seq in split_strip(attr, s, None if far else tess_len * 4, None if far or not tess_ground else tess_ground * 4):
                 pending.append((pas, mat_word[m.material], m.sector, seq))
     cell = 16384.0
     while True:
@@ -780,6 +788,7 @@ def main():
     ap.add_argument('--texel', type=float, default=0,
                     help='shrink each texture (down to 32) while its texels stay at most this many inches across')
     ap.add_argument('--tess', type=float, default=400, help='longest triangle edge in inches near the playable area')
+    ap.add_argument('--tess-ground', type=float, default=0, help='longest edge for near-horizontal triangles (0: as --tess)')
     ap.add_argument('--decal-lift', type=float, default=0, help='inches decals move off the surface under them')
     ap.add_argument('--max-radius', type=float, default=0, help='drop meshes with a larger bounding radius')
     ap.add_argument('--no-props', action='store_true', help='leave out GameObject props')
@@ -810,7 +819,8 @@ def main():
     os.makedirs(a.outdir, exist_ok=True)
     if a.decal_lift:
         lift_decals(meshes, materials, textures, a.decal_lift)
-    lvl = build_level(meshes, materials, textures, delta, a.tex, a.tess, hidden=hidden, texel=a.texel)
+    lvl = build_level(meshes, materials, textures, delta, a.tex, a.tess, hidden=hidden, texel=a.texel,
+                      tess_ground=a.tess_ground)
     open(os.path.join(a.outdir, f'{a.name}.psp_level'), 'wb').write(lvl)
     print(f'{a.name}.psp_level {len(lvl)} bytes')
 

@@ -1729,3 +1729,20 @@ PPSSPP (PSP-1000): all three play, then Hollywood.
   cas_shoes (shared by every style) keeps P8's 45 and gains the 3 THAW shoes the presets wear; the
   presets take THAW's socks and shoes (none where THAW has none) and no scalp. cas.pak 139,760 bytes.
   Software renderer, story start: no scalp patch, THAW's green-striped socks and boots.
+
+### Geometry dropping out near the camera (open)
+
+- Reproduced in the software renderer with P8V_CAM=-2336,98,-2700,0 (about 1 in above the street at
+  the story start): the bottom third of the screen shows the clear colour, the near road gone. At
+  130 in (and 104) the road is whole.
+- Not the fix: GE 0x1C = 1 in our material lists (P8's executable only ever writes 0x1C000000): the
+  band stays, and the HUD text and a ped vanish (state leaking). Removed.
+- Uniform tessellation does not fit: --tess 400 -> 3,350,144 bytes, 200 -> 5,345,616; both crash on
+  load (P8's largest stock level, Houses, is 2,851,544). New `--tess-ground <in>` (near-horizontal
+  triangles only, vertex-space third axis up): ground 400 -> 3,019,196; with --texel 6 2,867,260
+  (textures 741,888), which loads. At the 1-in camera the band is unchanged with it, so there the
+  cause is not triangle size (likely the GE dropping triangles whose vertices project outside its
+  guard band, which every nearby road vertex does from that height). A camera like the user's
+  recording (normal height, pitched up) still to be reproduced: P8V_CAM is yaw-only.
+- Meshes over radius 6000 are never tessellated: all 20 are Z_HO_Periph_* (the backdrop ring,
+  edges up to 44,408 in), not the street.
