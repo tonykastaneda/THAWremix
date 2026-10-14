@@ -1667,3 +1667,28 @@ PPSSPP (PSP-1000): all three play, then Hollywood.
   with the Neversoft logo). P8's Page 44 and Shaba left out, at the user's request.
   work/iso/M THAW P8 intro.iso; PPSSPP: Activision, Neversoft into THAW's intro with no break, title,
   main menu.
+- PSP-3000 result for M: the intro plays (Activision, THAW's intro as one movie) with ARK-4's extra
+  memory on Auto.
+
+### Hardware flicker (decals) and the PSP-accurate renderer (hardware test ISO N)
+
+- User report (phone video, work/from_phone, pulled from the iMessage thread via `imsg history
+  --chat-id 458 --attachments` on the Mac): texture flicker on the dinosaur diner, some roads, some
+  graffiti and shadows, most visible in dark spots; one or two buildings near the subway entrance
+  missing.
+- PPSSPP's software renderer (`SoftwareRenderer = True` in the test ini; the PSP's 16-bit depth) shows
+  the diner differently from the hardware renderer at the same camera (P8V_CAM=-1500,300,1700,1.62):
+  the purple chevrons go dotted, the sign's lettering and the window layer disappear.
+- Bug found: `lift_decals` lifted along each triangle's winding normal, but THAW's winding does not
+  follow its faces (culling off): 45% of triangles wind against their authored normals, and 1,633
+  lifted decal triangles had been pushed into their surfaces. THAW static meshes keep normals as 3
+  floats at the mesh's normal offset (checked: unit length, |cos| with the face ~1);
+  `thawscene.parse_geom` now reads them (Mesh.nrm, rotated with placed pieces and props) and decals
+  lift to the side their normals face.
+- The diner's lettering and dotted chevrons stay the same in the software renderer at 1, 3, 6 and 12
+  inches of lift, so they are not depth fighting; still to find (blend / alpha handling?).
+- Level rebuilt with the zero shift (`--at` = THAW's own P1 restart -2336.49 96.60 -2482.92; with
+  `--decal-lift 1` it reproduces work/p8mod/ho/z_sc.psp_level byte for byte):
+  work/lifttest/n3/z_sc.psp_level (`--texel 4 --tess 800 --decal-lift 3`, oriented lift). Up close and
+  at the diner in the normal renderer nothing floats visibly.
+- work/iso/N THAW P8 decal fix.iso: M plus that level (P8V_LEVEL). PPSSPP: intro, main menu.

@@ -318,7 +318,9 @@ def lift_decals(meshes, materials, textures, lift, log=print):
     """THAW layers decals (window and shadow decals, road reflections, stains) on surfaces at the same
     depth and draws them with a depth bias; the PSP has none, so they fight with the surface under
     them. Each triangle of a decal mesh (blended material, or an alpha-tested cutout) that lies in the
-    plane of an overlapping triangle of an opaque mesh moves `lift` inches along its own normal."""
+    plane of an overlapping triangle of an opaque mesh moves `lift` inches off it, to the side its
+    authored vertex normals face (the triangle's winding says nothing: culling is off, and lifting
+    along it put about half the decals behind their wall, where they never showed)."""
     def decal(m):
         rec = materials.get(m.material)
         if not rec:
@@ -349,7 +351,7 @@ def lift_decals(meshes, materials, textures, lift, log=print):
                 for gx in range(int(lo[0] // cell), int(hi[0] // cell) + 1):
                     for gz in range(int(lo[2] // cell), int(hi[2] // cell) + 1):
                         grid.setdefault((gx, gz), []).append(rec)
-    moved_meshes = moved = 0
+    moved_meshes = moved = flipped = 0
     for mi, m in enumerate(meshes):
         if not kind[mi]:
             continue
@@ -365,17 +367,22 @@ def lift_decals(meshes, materials, textures, lift, log=print):
                 if ln < 1e-3:
                     continue
                 nrm = nrm / ln
+                away = m.nrm is not None and nrm @ m.nrm[[a, b, c]].sum(0) < 0
+                if away:
+                    nrm = -nrm
                 ctr, lo, hi = t.mean(0), t.min(0), t.max(0)
                 for on, od, olo, ohi in grid.get((int(ctr[0] // cell), int(ctr[2] // cell)), ()):
                     if abs(on @ nrm) > 0.995 and abs(on @ ctr - od) < 1.0 and (lo <= ohi + 0.5).all() and (hi >= olo - 0.5).all():
                         shift[[a, b, c]] = nrm * lift
+                        flipped += away
                         break
         hit = np.abs(shift).sum(1) > 0
         if hit.any():
             P[hit] += shift[hit]
             moved_meshes += 1
             moved += int(hit.sum())
-    log(f'decals lifted {lift} in: {moved} vertices in {moved_meshes} meshes')
+    log(f'decals lifted {lift} in: {moved} vertices in {moved_meshes} meshes '
+        f'({flipped} of their triangles wound against their normals: lifted the other way)')
 
 
 def build_level(meshes, materials, textures, delta, max_side, tess_len=400, log=print, offset=None, hidden=(),

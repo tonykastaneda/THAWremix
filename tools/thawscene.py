@@ -20,7 +20,7 @@ MESH_SIZE = 0xE0
 
 
 class Mesh:
-    __slots__ = ('material', 'sector', 'center', 'radius', 'pos', 'col', 'uv', 'strips')
+    __slots__ = ('material', 'sector', 'center', 'radius', 'pos', 'col', 'uv', 'strips', 'nrm')
 
 
 def parse_geom(d):
@@ -47,7 +47,7 @@ def parse_geom(d):
     meshes = []
     for k in range(count):
         o = mesh_base + k * MESH_SIZE
-        stride, coff, uoff = d[o + 0x20], d[o + 0x24], d[o + 0x27]
+        stride, coff, noff, uoff = d[o + 0x20], d[o + 0x24], d[o + 0x25], d[o + 0x27]
         if d[o + 0x26]:
             continue  # skinned
         vc, ic, prim = u16(o + 0x2E), u32(o + 0x30), u32(o + 0x60)
@@ -67,6 +67,10 @@ def parse_geom(d):
             m.col = bgra[:, [2, 1, 0, 3]].copy()  # RGBA, 0x80 = full
         else:
             m.col = np.full((vc, 4), 0x80, np.uint8)
+        m.nrm = None  # authored vertex normals: 3 floats at noff in static meshes (unit length, they
+        # follow the faces; skins pack theirs in 4 bytes instead)
+        if 12 <= noff and noff + 12 <= stride and not noff < coff < noff + 12:
+            m.nrm = raw[:, noff:noff + 12].copy().view('<f4').reshape(vc, 3).astype(np.float64)
         if 12 <= uoff and uoff + 8 <= stride:
             m.uv = raw[:, uoff:uoff + 8].copy().view('<f4').reshape(vc, 2).astype(np.float64)
         else:
@@ -339,6 +343,8 @@ def load_zone(install, zone, flag_overrides=None, hidden_flags=()):
             pos, ang = p[1]
             r = euler_yxz(ang)
             m.pos = m.pos @ r.T + np.array(pos)
+            if m.nrm is not None:
+                m.nrm = m.nrm @ r.T
         kept.append(m)
     return materials, kept, textures, pieces, restarts
 
@@ -455,6 +461,7 @@ def load_props(install, zone):
             c = Mesh()
             c.material, c.sector, c.radius, c.col, c.uv, c.strips = m.material, name, m.radius, m.col, m.uv, m.strips
             c.pos = m.pos @ r.T + pos
+            c.nrm = m.nrm @ r.T if m.nrm is not None else None
             c.center = tuple(np.array(m.center) @ r.T + pos)
             meshes.append(c)
         for k, o in enumerate(cobjs):
