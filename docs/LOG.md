@@ -1746,3 +1746,20 @@ PPSSPP (PSP-1000): all three play, then Hollywood.
   recording (normal height, pitched up) still to be reproduced: P8V_CAM is yaw-only.
 - Meshes over radius 6000 are never tessellated: all 20 are Z_HO_Periph_* (the backdrop ring,
   edges up to 44,408 in), not the street.
+
+### Overlays already floating 1-6 in off their surface (hardware test ISO P)
+
+- 6,100 triangles in Hollywood overlap a parallel surface of another mesh 1-6 in away (road pieces,
+  tree shadows, the metro's window and decal sets, El Capitan, the Hollywood sign): THAW floats some
+  layers a little already, still too close for the PSP's 16-bit depth, and lift_decals only took
+  layers within 1 in. Now (LIFT_RANGE 6 in) such a layer moves until it is `lift` in front of the
+  surface (topped up, never moved back; layers behind a surface are left). --decal-lift 5: 10,962
+  vertices in 836 meshes (1,675 opaque-overlay triangles). Size unchanged (2,814,402).
+- The diner's sign lettering and dotted chevrons are not depth: unchanged at any lift. They come
+  back with mipmaps off for blended and cut-out materials (but then the chevrons, the Galleria sign
+  and the chain-link fence break instead). Coverage-preserving mips (alpha rescaled per level) did
+  not bring the lettering back either, and were removed. Still open: possibly the small levels'
+  encoding (CLUT4, bufw 32 for levels under 32 wide) or the LOD settings.
+- P8V_CAM takes an optional pitch (fifth value); its sign flips with yaw (to fix).
+- work/iso/P THAW P8 flicker fix.iso: intro build, level work/lifttest/p5 (texel 4, tess 800,
+  decal lift 5 with top-up), skater fix. PPSSPP: intro, main menu.

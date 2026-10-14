@@ -249,12 +249,15 @@ def tessellate(a, b, c, n):
         yield np.array(row)
 
 
-def split_strip(attr, s, max_edge, ground_edge=None):
+def split_strip(attr, s, max_edge, ground_edge=None, low=None):
     """Yields attribute sequences (strips of <= MAX_STRIP vertices) for one THAW strip. Triangles
     with an edge over max_edge (vertex-space units) are tessellated: the PSP rasteriser drops
     triangles that cross the near plane instead of clipping them, so big ground polygons vanish.
     ground_edge: a smaller limit for near-horizontal triangles (floors, roads: the camera is always
-    close to them)."""
+    close to them). low: (vertex-space height, limit): a smaller limit for triangles reaching below
+    that height (the street level the camera moves through; the GE also drops any triangle with a
+    vertex projecting far outside the screen, so near the camera an edge must stay under about five
+    times the distance)."""
     a, b, c = s[:-2], s[1:-1], s[2:]
     real = (a != b) & (b != c) & (a != c)
     if not real.any():
@@ -268,7 +271,10 @@ def split_strip(attr, s, max_edge, ground_edge=None):
             nz = np.cross(P[b] - P[a], P[c] - P[a])
             ln = np.linalg.norm(nz, axis=1)
             flat = np.abs(nz[:, 2]) > 0.8 * np.maximum(ln, 1e-9)  # vertex space: the third axis is up
-            lim[flat] = ground_edge
+            lim[flat] = np.minimum(lim[flat], ground_edge)
+        if low:
+            under = np.minimum.reduce([P[a][:, 2], P[b][:, 2], P[c][:, 2]]) < low[0]
+            lim[under] = np.minimum(lim[under], low[1])
         big = real & (e > lim)
     else:
         big = np.zeros(len(a), bool)
@@ -344,6 +350,10 @@ def overlap_in_plane(t1, t2, nrm, eps=0.25):
     return True
 
 
+LIFT_RANGE = 6.0  # inches: THAW floats some layers a little off their surface already (1-6 in: 6,100
+# triangles in Hollywood), still too close for the PSP's 16-bit depth
+
+
 def lift_decals(meshes, materials, textures, lift, log=print):
     """THAW layers decals (window and shadow decals, road reflections, stains, posters, crossing paint)
     on surfaces at the same depth and draws them with a depth bias; the PSP has none, so they fight
@@ -398,17 +408,22 @@ def lift_decals(meshes, materials, textures, lift, log=print):
             if away:
                 nrm = -nrm
             ctr, lo, hi = t.mean(0), t.min(0), t.max(0)
+            need = 0.0
             for oj, ot, on, od, olo, ohi in grid.get((int(ctr[0] // cell), int(ctr[2] // cell)), ()):
-                if oj == mi or abs(on @ nrm) <= 0.995 or abs(on @ ctr - od) >= 1.0:
+                if oj == mi or abs(on @ nrm) <= 0.995 or abs(on @ ctr - od) >= LIFT_RANGE:
                     continue
                 if not ((lo <= ohi + 0.5).all() and (hi >= olo - 0.5).all()):
                     continue
                 if not kind[mi] and (area[oj] <= area[mi] or not overlap_in_plane(t, ot, on)):
                     continue
-                shift[[a, b, c]] = nrm * lift
+                gap = float((ctr - ot[0]) @ nrm)  # how far in front of that surface it already is
+                if gap < -0.5:
+                    continue  # behind it: not a layer on its face
+                need = max(need, lift - gap)
+            if need > 0:
+                shift[[a, b, c]] = nrm * need
                 flipped += away
                 opaque += not kind[mi]
-                break
         hit = np.abs(shift).sum(1) > 0
         if hit.any():
             P[hit] += shift[hit]
@@ -419,7 +434,7 @@ def lift_decals(meshes, materials, textures, lift, log=print):
 
 
 def build_level(meshes, materials, textures, delta, max_side, tess_len=400, log=print, offset=None, hidden=(),
-                texel=0, tess_ground=0):
+                texel=0, tess_ground=0, tess_low=None):
     tb = TexBlock(max_side)
     sides = texture_sides(meshes, materials, max_side, texel) if texel else {}
     lists = [[GE_RET]]  # word 0: never selected explicitly
@@ -465,7 +480,8 @@ def build_level(meshes, materials, textures, delta, max_side, tess_len=400, log=
         attr = np.concatenate([vs, m.uv, col[:, :3], np.clip(col[:, 3:4] * ascale, 0, 255)], 1)
         far = m.radius > 6000
         for s in m.strips:
-            for seq in split_strip(attr, s, None if far else tess_len * 4, None if far or not tess_ground else tess_ground * 4):
+            for seq in split_strip(attr, s, None if far else tess_len * 4, None if far or not tess_ground else tess_ground * 4,
+                                   None if far or not tess_low else (tess_low[0] * 4 - offset[2], tess_low[1] * 4)):
                 pending.append((pas, mat_word[m.material], m.sector, seq))
     cell = 16384.0
     while True:
@@ -789,6 +805,8 @@ def main():
                     help='shrink each texture (down to 32) while its texels stay at most this many inches across')
     ap.add_argument('--tess', type=float, default=400, help='longest triangle edge in inches near the playable area')
     ap.add_argument('--tess-ground', type=float, default=0, help='longest edge for near-horizontal triangles (0: as --tess)')
+    ap.add_argument('--tess-low', type=float, nargs=2, metavar=('HEIGHT', 'EDGE'),
+                    help='longest edge for triangles reaching below world height HEIGHT (the street band)')
     ap.add_argument('--decal-lift', type=float, default=0, help='inches decals move off the surface under them')
     ap.add_argument('--max-radius', type=float, default=0, help='drop meshes with a larger bounding radius')
     ap.add_argument('--no-props', action='store_true', help='leave out GameObject props')
@@ -820,7 +838,7 @@ def main():
     if a.decal_lift:
         lift_decals(meshes, materials, textures, a.decal_lift)
     lvl = build_level(meshes, materials, textures, delta, a.tex, a.tess, hidden=hidden, texel=a.texel,
-                      tess_ground=a.tess_ground)
+                      tess_ground=a.tess_ground, tess_low=a.tess_low)
     open(os.path.join(a.outdir, f'{a.name}.psp_level'), 'wb').write(lvl)
     print(f'{a.name}.psp_level {len(lvl)} bytes')
 
