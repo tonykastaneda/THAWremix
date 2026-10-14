@@ -37,12 +37,17 @@ def snorm(w, fields):
 
 def read_thaw_skin(path):
     """(materials, textures, [mesh dict]) of a THAW .skin.wpc and its .tex.wpc."""
-    d = open(path, 'rb').read()
+    tex_path = path[:-len('.skin.wpc')] + '.tex.wpc'
+    textures = ts.parse_tex(open(tex_path, 'rb').read()) if os.path.exists(tex_path) else {}
+    return read_thaw_scene(open(path, 'rb').read(), textures)
+
+
+def read_thaw_scene(d, textures, rigid=False):
+    """(materials, textures, [mesh dict]) of a THAW .skin.wpc or .mdl.wpc (same scene container);
+    rigid .mdl's meshes (no weights) are bound wholly to bone 0; skins skip unweighted meshes."""
     u16 = lambda o: struct.unpack_from('<H', d, o)[0]  # noqa: E731
     u32 = lambda o: struct.unpack_from('<I', d, o)[0]  # noqa: E731
     materials, _ = ts.parse_geom(d)
-    tex_path = path[:-len('.skin.wpc')] + '.tex.wpc'
-    textures = ts.parse_tex(open(tex_path, 'rb').read()) if os.path.exists(tex_path) else {}
     scene = 0x20 + u32(0x24)
     base = scene + u32(scene + 4)
     mb = base + u32(base + 0x9C)
@@ -53,20 +58,23 @@ def read_thaw_skin(path):
         st, coff, noff, nw, uoff = d[o + 0x20], d[o + 0x24], d[o + 0x25], d[o + 0x26], d[o + 0x27]
         vc, ic, prim = u16(o + 0x2E), u32(o + 0x30), u32(o + 0x60)
         ib, vb = base + u32(o + 0x64) + 12, base + u32(o + 0x84) + 8
-        if not nw or prim not in (4, 5) or vc == 0:
+        if (not nw and not rigid) or prim not in (4, 5) or vc == 0:
             continue
         pos, nrm, col, uv, bones, wts = [], [], [], [], [], []
         for v in range(vc):
             r = vb + v * st
             pos.append(struct.unpack_from('<3f', d, r))
-            w = snorm(u32(r + 12), (11, 11, 10))
-            ix = [b // 3 for b in struct.unpack_from('<4H', d, r + 16)]
             pairs = {}
-            for i in range(min(nw, 3)):
-                if w[i] > 0.004:
-                    pairs[ix[i]] = pairs.get(ix[i], 0) + w[i]
-            if not pairs:
-                pairs = {ix[0]: 1.0}
+            if nw:
+                w = snorm(u32(r + 12), (11, 11, 10))
+                ix = [b // 3 for b in struct.unpack_from('<4H', d, r + 16)]
+                for i in range(min(nw, 3)):
+                    if w[i] > 0.004:
+                        pairs[ix[i]] = pairs.get(ix[i], 0) + w[i]
+                if not pairs:
+                    pairs = {ix[0]: 1.0}
+            else:
+                pairs = {0: 1.0}
             bones.append(list(pairs))
             wts.append(list(pairs.values()))
             nrm.append(snorm(u32(r + noff), (11, 11, 10)))
@@ -156,14 +164,20 @@ def vtype(n):
     return 2 | 6 << 2 | 1 << 5 | 2 << 7 | 1 << 9 | (n - 1) << 14
 
 
+# a rigid .mdl's vertices: as vtype's without weights (the engine sets the object's matrix)
+RIGID_VTYPE = 2 | 6 << 2 | 1 << 5 | 2 << 7
+
+
 def pack_vertex(mesh, v, pal):
-    n = len(pal)
-    w = [0.0] * n
-    for b, x in zip(mesh['bones'][v], mesh['wts'][v]):
-        w[pal.index(b)] += x
-    tot = sum(w) or 1.0
-    q = [int(round(x / tot * 0xF8)) for x in w]
-    q[q.index(max(q))] += 0xF8 - sum(q)
+    """pal None: a rigid vertex (no weights)."""
+    q = []
+    if pal is not None:
+        w = [0.0] * len(pal)
+        for b, x in zip(mesh['bones'][v], mesh['wts'][v]):
+            w[pal.index(b)] += x
+        tot = sum(w) or 1.0
+        q = [int(round(x / tot * 0xF8)) for x in w]
+        q[q.index(max(q))] += 0xF8 - sum(q)
     out = bytearray(bytes(q))
     out += bytes(-len(out) % 2)
     u, vv = mesh['uv'][v]
@@ -218,8 +232,19 @@ def convert(src, out, name=None, max_side=64, palette_max=8, also=(), retex=None
     for cks, img in (retex or {}).items():
         (rgba, comp), = ts.parse_tex(bytes(8) + open(img, 'rb').read()).values()
         textures[cks] = (rgba, comp)
+    body, info = build(materials, textures, meshes, name or os.path.basename(out), max_side, palette_max)
+    open(out, 'wb').write(body)
+    print(f'{out}: {info}')
+    return len(body)
+
+
+def build(materials, textures, meshes, name, max_side=64, palette_max=8, rigid=False):
+    """(P8 model body, summary). rigid: a .mdl's geometry (P8's cutscene props): one display list run
+    from the vertex data in order, vertices without weights, one material record at list offset 0."""
     tb = thaw2psp.TexBlock(max_side)
-    recs, dl, verts = [], bytearray(ge(0x10) + ge(0x0B)), bytearray()
+    recs, dl, verts = [], bytearray() if rigid else bytearray(ge(0x10) + ge(0x0B)), bytearray()
+    if rigid:
+        recs.append((1, 0, 0, 0, 0x808080))
     radius, max_bone = 0.0, 0
     for m in meshes:
         rec = materials.get(m['material'])
@@ -230,17 +255,23 @@ def convert(src, out, name=None, max_side=64, palette_max=8, also=(), retex=None
                tb.add('white', thaw2psp.white_texture()))
         groups = ([(p, [('tris', t)]) for p, t in draws(m, palette_max)] if m['strip'] is None else
                   [(p, [('strip', r) for r in rs]) for p, rs in strip_draws(m, palette_max)])
+        if rigid:  # one bone: a single group holding every item
+            groups = [(None, [i for _, items in groups for i in items])]
         for pal, items in groups:
-            vt = vtype(len(pal))
-            recs.append((1, len(dl), m['material'], 0, 0x808080))
-            dl += material_words(tex, vt, cutout)
-            recs.append((4, len(dl), tcks, 0, 0))
-            dl += ge(0x10) + ge(0x0B)
-            recs.append((2, len(dl), 0, len(verts), 0))
-            dl += ge(0x10) + ge(0x12, vt) + ge(0x2A)
-            for b in pal:
-                dl += ge(0x0A, 0x40 * b)
-                max_bone = max(max_bone, b)
+            if rigid:
+                vt = RIGID_VTYPE
+                dl += material_words(tex, vt, cutout)[:-4] + ge(0x2A)  # the state block less its RET
+            else:
+                vt = vtype(len(pal))
+                recs.append((1, len(dl), m['material'], 0, 0x808080))
+                dl += material_words(tex, vt, cutout)
+                recs.append((4, len(dl), tcks, 0, 0))
+                dl += ge(0x10) + ge(0x0B)
+                recs.append((2, len(dl), 0, len(verts), 0))
+                dl += ge(0x10) + ge(0x12, vt) + ge(0x2A)
+                for b in pal:
+                    dl += ge(0x0A, 0x40 * b)
+                    max_bone = max(max_bone, b)
             for kind, item in items:
                 if kind == 'tris':
                     for i in range(0, len(item), 21000):  # PRIM counts are 16-bit
@@ -254,12 +285,14 @@ def convert(src, out, name=None, max_side=64, palette_max=8, also=(), retex=None
                     dl += ge(0x9B, par) + ge(0x04, 4 << 16 | len(seq))  # FFACE by the run's parity
                     for v in seq:
                         verts += pack_vertex(m, v, pal)
-                    seq = seq
                 for v in seq:
                     radius = max(radius, float(np.linalg.norm(m['pos'][v])) * 16)
-            verts += bytes(-len(verts) % 4)
-            dl += ge(0xFF) + ge(0x0B)
-    name = name or os.path.basename(out)
+            if not rigid:
+                verts += bytes(-len(verts) % 4)
+            dl += ge(0xFF) + (b'' if rigid else ge(0x0B))
+    if rigid:
+        dl += ge(0x0B)
+        verts += bytes(-len(verts) % 4)
     nrec = len(recs) + 1
     tex_off = 0x60 + nrec * 16
     tex_off += -tex_off % 64
@@ -267,20 +300,19 @@ def convert(src, out, name=None, max_side=64, palette_max=8, also=(), retex=None
     dl_off = tex_off + len(tdata)
     v_off = dl_off + len(dl)
     hdr = struct.pack('<16I', 0xC0EDBABE, 0, 0x60, 0, 0, tex_off, len(tdata), 0, v_off, len(verts), 0,
-                      dl_off, len(dl), 0, max_bone + 1, 0)
+                      dl_off, len(dl), 0, 0 if rigid else max_bone + 1, 0)
     hdr = bytearray(hdr)
     struct.pack_into('<f', hdr, 12, radius)
-    body = bytearray(hdr) + ('`' + name).encode('latin-1')[:31].ljust(32, b'\0')
+    body = bytearray(hdr) + (('A' if rigid else '`') + name).encode('latin-1')[:31].ljust(32, b'\0')
     for t, off, a, b, c in recs:
         body += struct.pack('<B', t) + struct.pack('<H', off) + b'\0' + struct.pack('<3I', a, b, c)
     body += bytes(16)
     body += bytes(tex_off - len(body))
     body += tdata + dl + verts
-    open(out, 'wb').write(body)
     ndraw = sum(1 for r in recs if r[0] == 2)
-    print(f'{out}: {len(meshes)} THAW meshes -> {ndraw} draws, {len(verts) // 1} vertex bytes, '
-          f'{len(tdata)} texture bytes, {len(body):,} bytes, bones up to {max_bone}')
-    return len(body)
+    info = (f'{len(meshes)} THAW meshes -> {ndraw} draws, {len(verts)} vertex bytes, {len(tdata)} texture '
+            f'bytes, {len(body):,} bytes, bones up to {max_bone}')
+    return bytes(body), info
 
 
 if __name__ == '__main__':

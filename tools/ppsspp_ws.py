@@ -228,7 +228,9 @@ def start(game):
     """Launches the test copy on its own hidden desktop: its windows (and any error dialog) are never
     drawn on the user's screen and can never take focus. It also starts minimized there.
     From session 0 (an SSH login: no display, no audio, D3D11 fails) the launch goes through the
-    scheduled task TASK, which runs `ppsspp_ws.py launch` in the user's desktop session."""
+    scheduled task TASK, which runs `ppsspp_ws.py launch` in the user's desktop session. The task is
+    used from the desktop session too: a direct launch from Claude Code's shell opens PPSSPP without
+    loading the game (2026-10-13)."""
     kill()
     log = os.path.join(os.path.dirname(EXE), 'ppsspp.log')
     for _ in range(20):  # PPSSPP appends; one log per boot (it reached 43 GB once)
@@ -238,19 +240,16 @@ def start(game):
             break
         except PermissionError:  # a just-killed emulator can hold it for a moment
             time.sleep(0.5)
-    if session_id() == 0:
-        with open(REQFILE, 'w', encoding='utf-8') as f:
-            f.write(os.path.abspath(game))
-        r = subprocess.run(['schtasks', '/run', '/tn', TASK], capture_output=True, text=True,
-                           creationflags=NO_WINDOW)
-        if r.returncode:
-            raise OSError(f'schtasks /run {TASK}: {r.stdout}{r.stderr} (register it: ppsspp_ws.py register)')
-        for _ in range(40):
-            if os.path.exists(PIDFILE):
-                break
-            time.sleep(0.25)
-    else:
-        launch(game)
+    with open(REQFILE, 'w', encoding='utf-8') as f:
+        f.write(os.path.abspath(game))
+    r = subprocess.run(['schtasks', '/run', '/tn', TASK], capture_output=True, text=True,
+                       creationflags=NO_WINDOW)
+    if r.returncode:
+        raise OSError(f'schtasks /run {TASK}: {r.stdout}{r.stderr} (register it: ppsspp_ws.py register)')
+    for _ in range(40):
+        if os.path.exists(PIDFILE):
+            break
+        time.sleep(0.25)
     for _ in range(60):
         try:
             WS().s.close()

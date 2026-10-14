@@ -1540,3 +1540,25 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   yaw 1.093 the PETA protesters line the street in front of the scaffold / the fallen head lies on the
   street and the protesters are gone. The pieces built hidden in the .psp_level (STORY_START 'hidden')
   do show once their flag is on: P8 is not Remix here.
+
+### THAW's dino cutscene played by P8 (big build only, so far)
+
+- `tools/p8cut.py` converts a THAW cutscene to P8 PSP cutscene paks: THAW PS2's paks as the source
+  (.ska / .ske / .qb carry over unchanged), models converted from THAW PC's (`thaw2p8skin`: skins, and
+  now rigid .mdl with a 0xC0 header and no weights), .stex stubbed, .shd dropped, ps2 -> psp paths.
+  `p8cut.py sizes` adds the paks to `pak_sizes_psp` (PlayCutscene reads a null struct without them).
+  build.py: `CUTSCENES` (cached in `cutout/`), test switch `P8V_PLAYCUT=<name>` plays one from the
+  first step's start script.
+- HO_LevelEvent_Dino: `_main` 877,776 bytes (6 character skins 338 KB, 60 rigid props 294 KB, dino
+  skins 172 KB, skeletons 51 KB), `_cam0` 491,008 (the .ska animation 485 KB). P8's largest stock
+  cutscene is about 300 KB in total.
+- PSP-1000 build: crash (null pak in the pak entry loader 0x18bb9c, called from 0x18a8c8): the
+  `_main` pak's allocation fails. PlayCutscene's heap is made in 0x171174 as the main heap's largest
+  free block less 0x32000; measured at the cutscene start: 421,504 free, so the cutscene heap is
+  216,704 bytes. GoalHeap (271 KB free), COIMHeap (337 KB free, peds in it) and PedParts are separate
+  heaps, so the gap cannot simply take them.
+- PSP-2000/3000 build (`P8V_BIG=1`, PSPModel 1): cutscene heap 30.9 MB; the cutscene plays through in
+  PPSSPP (dinosaur with globe falls, bus, back to play with no fault). The rigid props draw (the
+  converter's "0 draws" count is for skinned draws only). Textures at the 64-texel cap look blocky.
+- `ppsspp_ws.start` now always launches through the scheduled task: launched directly from Claude
+  Code's shell, PPSSPP opened without loading the game.
