@@ -1611,3 +1611,21 @@ work/iso/I THAW P8 movie mux test.iso (PSP-1000 build, P8V_AUTO, P8V_NOINTRO, bu
 2. t_vid: our THAW Neversoft video (x264) with P8 retail audio (c_s_iscg's) (tests our video);
 3. t_all: our Neversoft video with our 352 kbps audio (tests our audio).
 PPSSPP (PSP-1000): all three play, then Hollywood.
+- PSP-3000 result for I (extra memory forced): the Tony clip and one Neversoft logo (t_vid: our
+  video, retail audio) play, then black screen and a crash at t_all. So the new mux and our x264
+  video work on hardware; our 352 kbps ATRAC3plus audio (2048-byte frames) crashes the player.
+
+### ATRAC3plus at P8's rate: patched atracdenc (hardware test ISO J)
+
+- Upstream atracdenc (checked at master, 2026-09) still fixes ATRAC3plus at 2048-byte frames; its
+  --bitrate is ATRAC3-only. Its bitstream writer already takes the frame size (TAt3PBitStream
+  frameSz, bit allocation from it), so `tools/atracdenc_thaw/atracdenc_thaw.patch` adds
+  AT3P_FRAME_BYTES for it and both output containers, plus `pcm_io_rawwav.cpp` (16-bit WAV reader)
+  so it builds with MinGW alone (CMake from scoop; static link). Built into bin/atracdenc/thaw.
+- 744-byte frames give `0F D0 28 5C` (P8's movies, 128 kbps), 560 give `28 45` (Remix's, 96 kbps).
+  ffmpeg decodes both; their loudness envelopes follow the source as the 352 kbps encode does.
+- pmfmux uses it (`--abytes`, default 744). Template for P8: a retail PSMF0014 movie (c_mug_th:
+  system header video 251 KB / audio 8 KB; the video entry is stream 0xB9, all video streams).
+- work/iso/J THAW P8 movie audio test.iso (PSP-1000 build, P8V_AUTO, P8V_NOINTRO,
+  `P8V_PLAYMOVIE=t\t_new744,t\t_new560`): THAW's Neversoft logo encoded fresh from intro.bik
+  (first 11.5 s) with 128 kbps audio, then the same at 96 kbps, then Hollywood. PPSSPP: both play.

@@ -16,7 +16,10 @@ Layout copied from Remix's own movies (USRDIR\\Movies\\*.pmf):
              00 00 <u16 BE offset of the first whole frame header>; PTS on every packet.
            The first sector also has a system header (0xBB). Short final packets are followed
            by a padding PES (0xBE) to fill the sector.
-Audio is encoded with atracdenc (bin/atracdenc, LGPL, github.com/dcherednik/atracdenc).
+Audio is encoded with atracdenc (LGPL, github.com/dcherednik/atracdenc), built with tools/atracdenc_thaw
+(bin/atracdenc/thaw): its ATRAC3plus frame size is fixed at 2048 bytes (352 kbps), which the PSP's
+movie player crashes on; the patch takes AT3P_FRAME_BYTES (--abytes: 744 = 128 kbps as P8's movies,
+560 = 96 kbps as Remix's).
 """
 import argparse
 import os
@@ -26,7 +29,7 @@ import sys
 import tempfile
 
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
-ATRACDENC = os.path.join(ROOT, 'bin', 'atracdenc', 'x86', 'atracdenc.exe')
+ATRACDENC = os.path.join(ROOT, 'bin', 'atracdenc', 'thaw', 'atracdenc.exe')
 SECTOR = 2048
 FPS = 30000 / 1001
 TICKS_PER_FRAME = 3003
@@ -37,8 +40,8 @@ MUX_RATE = 25000  # units of 50 bytes/s, as in the stock movies
 NOWIN = 0x08000000
 
 
-def run(cmd):
-    subprocess.run(cmd, check=True, capture_output=True, creationflags=NOWIN)
+def run(cmd, env=None):
+    subprocess.run(cmd, check=True, capture_output=True, creationflags=NOWIN, env=env)
 
 
 def pts_bytes(marker, t):
@@ -143,14 +146,14 @@ def frame_types(h264_file):
     return [tuple(int(x) if x not in ('', 'N/A') else None for x in l.split(',')) for l in out.split() if l]
 
 
-def encode_audio(src, out_raw, seconds=None, start=None):
+def encode_audio(src, out_raw, seconds=None, start=None, frame_bytes=744):
     wav = out_raw + '.wav'
     cmd = ['ffmpeg', '-v', 'error', '-y', '-i', src, '-vn', '-ac', '2', '-ar', '44100', wav]
     at = cmd.index('-i')
     cmd[at:at] = (['-ss', str(start)] if start else []) + (['-t', str(seconds)] if seconds else [])
     run(cmd)
     oma = out_raw + '.oma'
-    run([ATRACDENC, '-e', 'atrac3plus', '-i', wav, '-o', oma])
+    run([ATRACDENC, '-e', 'atrac3plus', '-i', wav, '-o', oma], env=dict(os.environ, AT3P_FRAME_BYTES=str(frame_bytes)))
     data = open(oma, 'rb').read()
     assert data[:3] == b'EA3' and data[0x20] == 1, 'not ATRAC3plus OMA'
     params = data[0x22:0x24]  # e.g. 28 FF: 44.1 kHz, stereo, (0xFF + 1) * 8 = 2048-byte frames
@@ -186,7 +189,7 @@ def gop_info(aus, ends):
 
 
 def buffer_sizes(system_header):
-    """The P-STD buffer sizes (bytes) the system header declares: {stream id: size}."""
+    """The P-STD buffer sizes (bytes) the system header declares: {stream id: size} (0xB9: all video)."""
     out, p = {}, 12
     while p + 3 <= len(system_header):
         sid, v = system_header[p], (system_header[p + 1] << 8) | system_header[p + 2]
@@ -259,7 +262,7 @@ def mux(aus, au_times, frames, start=90000, system_header=SYSTEM_HEADER):
                     pos // unit, (pos + len(chunk) - 1) // unit])
     # schedule against the decoder buffers
     bufs = buffer_sizes(system_header)
-    cap = {'v': bufs.get(0xE0, 256 << 10) * 9 // 10, 'a': bufs.get(0xBD, 8 << 10) * 9 // 10}
+    cap = {'v': bufs.get(0xE0, bufs.get(0xB9, 256 << 10)) * 9 // 10, 'a': bufs.get(0xBD, 8 << 10) * 9 // 10}
     # and no further ahead of its deadline than the stock movies send it (video 0.9-1.0 s, audio
     # about 0.2 s; only the first audio packet goes out early, in sector 1)
     lead = {'v': 0.9 * 90000, 'a': 0.2 * 90000}
@@ -372,6 +375,7 @@ def main():
     ap.add_argument('--seconds', type=float)
     ap.add_argument('--start', type=float)
     ap.add_argument('--crop', help='ffmpeg crop W:H:X:Y applied before scaling to 480x272')
+    ap.add_argument('--abytes', type=int, default=744, help='ATRAC3plus frame bytes (744: 128 kbps, as P8)')
     ap.add_argument('--video-from', help='take the video from this .pmf (no encode; tests)')
     ap.add_argument('--audio-from', help='take the audio from this .pmf (no encode; tests)')
     a = ap.parse_args()
@@ -394,7 +398,7 @@ def main():
     if a.audio_from:
         frames = demux(a.audio_from)[2]
     else:
-        frames = encode_audio(a.input, os.path.join(tmp, 'a.at3p'), a.seconds, a.start)
+        frames = encode_audio(a.input, os.path.join(tmp, 'a.at3p'), a.seconds, a.start, a.abytes)
     # no more audio than video
     keep = len(aus) * TICKS_PER_FRAME * 44100 // 90000 // AT3_SAMPLES + 1
     frames = (frames[0], frames[1][:keep])
