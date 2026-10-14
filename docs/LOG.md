@@ -1715,3 +1715,17 @@ PPSSPP (PSP-1000): all three play, then Hollywood.
 - work/lifttest/e3/z_sc.psp_level (2,814,402 bytes): `--texel 4 --tess 800 --decal-lift 3`, at the
   zero shift. PPSSPP: diner and story start look as before (no cracks).
 - work/iso/O THAW P8 overlay fix.iso: M plus that level. PPSSPP: intro, main menu.
+
+### Software renderer = PSP; skater's scalp and socks
+
+- The user played ISO O in the test PPSSPP copy with `SoftwareRenderer = True` (a visible window,
+  launched with Start-Process; the debugger's `dshot` reads it) and found it "basically identical" to
+  the PSP-3000: decal flicker, ground and walls dropping out near a low camera, the diner sign. Used
+  from now on for rendering checks. Recordings: work/shots/cut/rec_20s.mp4, rec2_20s.mp4 (dshot in a
+  loop, ~23 fps).
+- Skater: the converted PUNK presets still wore P8's PUNK_Body_Head01_Scalp01 (cas_punk_scalp: a pale
+  cap through THAW's hair; THAW's head has its own scalp) and P8's PUNK_Socks / P8 shoes (shaped for
+  P8's legs, floating around THAW's calves). p8cas: cas_punk_socks becomes THAW's male socks list;
+  cas_shoes (shared by every style) keeps P8's 45 and gains the 3 THAW shoes the presets wear; the
+  presets take THAW's socks and shoes (none where THAW has none) and no scalp. cas.pak 139,760 bytes.
+  Software renderer, story start: no scalp patch, THAW's green-striped socks and boots.

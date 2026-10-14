@@ -270,12 +270,13 @@ def main():
 
     sold = {}  # P8 list -> THAW desc_ids now in it
 
-    def replace_list(p8name, entries, keep_first=True, flag_if=None):
-        """flag_if: {P8 flag: THAW flags that call for it}"""
+    def replace_list(p8name, entries, keep_first=True, flag_if=None, append=False):
+        """flag_if: {P8 flag: THAW flags that call for it}; append: keep all of P8's entries (a list
+        other styles share) and add THAW's after them"""
         nonlocal d
         t, (et, old) = get_global(d, K(p8name))
         cf = common_flags(old)
-        new = [old[0]] if keep_first else []
+        new = list(old) if append else [old[0]] if keep_first else []
         for ent in entries:
             ef = set(cf) if field(ent, 'mesh') is not None else set()
             ef |= {f for f, need in (flag_if or {}).items() if flags(ent) & {K(n) for n in need}}
@@ -297,23 +298,34 @@ def main():
                  flag_if={0x9b421c33: ('force_lower_legs_calves', 'force_lower_legs_rip')})
     shorts = {field(x, 'desc_id') for x in lst('skater_m_legs')
               if flags(x) & {K('force_lower_legs_calves'), K('force_lower_legs_rip')}}
+    # socks and shoes: P8's PUNK socks and P8's shoes are shaped for P8's legs and float around THAW's
+    # calves. The PUNK socks list becomes THAW's male socks; the shoes list is shared by every style,
+    # so it keeps P8's and gains the THAW shoes the three presets below wear
+    presets = ('appearance_custom_skater_male_01', 'appearance_custom_skater_male_02',
+               'appearance_custom_skater_male_03')
+    replace_list('cas_punk_socks', [x for x in lst('socks') if b'skater_male' in (field(x, 'mesh') or b'')])
+    worn = {field(dict(T[K(a)])[K('shoes')][1], 'desc_id') for a in presets if K('shoes') in dict(T[K(a)])}
+    replace_list('cas_shoes', [x for x in lst('shoes') if field(x, 'desc_id') in worn], append=True)
 
     # P8's three PUNK presets (0xee5fffac is the style's default appearance, skater_helpers 0xa58cd6ef)
-    # become THAW's default custom skaters 1-3: hair, shirt and pants with their colours; the lower legs
-    # show under shorts
-    for p8app, thawapp in ((0xee5fffac, 'appearance_custom_skater_male_01'),
-                           (0x7756ae16, 'appearance_custom_skater_male_02'),
-                           (0x00519e80, 'appearance_custom_skater_male_03')):
+    # become THAW's default custom skaters 1-3: hair, shirt, pants, socks and shoes with their colours, no
+    # P8 scalp; the lower legs show under shorts
+    for p8app, thawapp in zip((0xee5fffac, 0x7756ae16, 0x00519e80), presets):
         t, app = get_global(d, p8app)
         tapp = dict(T[K(thawapp)])
         new = []
         for pk, (pt, pv) in app:
             for p8name, thawname in (('cas_punk_hair', 'skater_m_hair'), ('cas_punk_torso', 'skater_m_torso'),
-                                     ('cas_punk_legs', 'skater_m_legs')):
+                                     ('cas_punk_legs', 'skater_m_legs'), ('cas_punk_socks', 'socks'),
+                                     ('cas_shoes', 'shoes')):
                 if pk == K(p8name) and K(thawname) in tapp:
                     tv = tapp[K(thawname)][1]
                     if field(tv, 'desc_id') in sold[p8name]:
                         pv = tv
+                    elif field(tv, 'desc_id') == K('none'):  # THAW wears none (no socks)
+                        pv = [(K('desc_id'), (KEY, K('none')))]
+            if pk == K('cas_punk_scalp'):  # P8's scalp piece pokes through THAW's hair; THAW's head has its own
+                pv = [(K('desc_id'), (KEY, K('none')))]
             new.append((pk, (pt, pv)))
         legs = dict(new).get(K('cas_punk_legs'))
         bare = legs is not None and field(legs[1], 'desc_id') in shorts
