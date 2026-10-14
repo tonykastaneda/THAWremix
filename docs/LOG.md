@@ -1577,3 +1577,37 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   hardware without p8eboot's intro patch, and whether in-level movies fit in PSP-1000 memory. ISO B
   (P8 baseline: retail data + the intro patch) still to report: it tells whether the intro crash is
   the patch rather than our movies.
+- PSP-3000 result for H (ARK-4 extra memory forced): the retail clip plays, then a crash when ours
+  starts. So in-level movies fit and the problem is our movie file (as A's intro crash).
+
+### pmfmux: Sony's PSMF layout (hardware test ISO I)
+
+Every stock movie (P8's and Remix's) differs from what pmfmux wrote:
+- A private stream 2 (0xBF) packet starts each GOP's sector, before the video PES:
+  `01 E0`, four u16 sector offsets (from this sector) where the GOP's first four pictures end,
+  u32 0, u16 2 + 4n, u16 n, then per picture u32 size | 0x800000 if it is a reference picture
+  (nal_ref_idc != 0). Checked against 961 pictures of three stock movies, no mismatch. A GOP
+  starts at an access unit carrying an SPS (a scene-cut IDR inside a GOP does not start one).
+  pmfmux wrote none.
+- The first sector already carries the system header, the 0xBF packet and video (ours: padding).
+- Video PTS + DTS only on a GOP's first packet and then about every 16 frames; other video
+  packets are full (PES length 2028) with no timestamps. Sony's streams decode one frame early
+  (DTS = PTS - 3003); x264's without B-frames have DTS = PTS, so DTS now comes from the source.
+- Pacing: the system header declares the decoder buffers (P8: video 251 KB, audio 8 KB; Remix:
+  4 KB audio). Sony's packets go out earliest deadline first, video about 0.9-1.0 s and audio
+  about 0.2 s ahead of their decode time, the SCR jumping when nothing is due. pmfmux sent audio
+  0.5 s ahead (about 10 KB of our 352 kbps audio before the first frame: over the 8 KB buffer).
+- Our first access unit began with x264's version SEI before its delimiter; now dropped (Sony's:
+  AUD, SPS, PPS, SEI..., slice).
+- Still different: our audio is atracdenc's 352 kbps ATRAC3plus (2048-byte frames); P8's movies use
+  128 kbps (744-byte frames, `0F D0 28 5C`), Remix's 96 kbps. atracdenc has no other ATRAC3plus rate.
+pmfmux rewritten to do all of the above (mux(), buffer_sizes, gop_info; `--video-from` /
+`--audio-from` reuse a movie's streams). Remuxing P8's c_mug_th gives the same GOP sectors
+(0, 161, 269) and the same first-GOP end sectors (10, 13, 17, 21) as Sony's file.
+
+work/iso/I THAW P8 movie mux test.iso (PSP-1000 build, P8V_AUTO, P8V_NOINTRO, build.py
+`P8V_PLAYMOVIE=t\t_mux,t\t_vid,t\t_all`, movies in `movies\t` from work/movtest) plays in Hollywood:
+1. t_mux: P8's Tony Hawk mugshot clip, remuxed by the new pmfmux (tests the muxer alone);
+2. t_vid: our THAW Neversoft video (x264) with P8 retail audio (c_s_iscg's) (tests our video);
+3. t_all: our Neversoft video with our 352 kbps audio (tests our audio).
+PPSSPP (PSP-1000): all three play, then Hollywood.
