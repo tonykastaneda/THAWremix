@@ -1562,3 +1562,18 @@ window's display instead (the test copy runs unminimized but on the hidden deskt
   converter's "0 draws" count is for skinned draws only). Textures at the 64-texel cap look blocky.
 - `ppsspp_ws.start` now always launches through the scheduled task: launched directly from Claude
   Code's shell, PPSSPP opened without loading the game.
+
+### In-level movies (the pre-rendered cutscene route): hardware test ISO H
+
+- P8 plays its own story clips in-level through script 0x287fb55a (`Name = "c\C_s_int"`, PlayMovie
+  on `movies\<dir>\<name>.pmf`). build.py test switch `P8V_PLAYMOVIE=<name>,<name>`: the first step's
+  start plays them in turn. `p8goals zoneappend` no longer reads the `\n` in a path ("start\ns_logo")
+  as a line break.
+- PSP-1000 build (P8V_AUTO, P8V_NOINTRO), PPSSPP PSPModel 0: PlayMovie `c\c_mug_th` (retail) then
+  `start\ns_logo` (ours, pmfmux) both run in Hollywood with THAW's goals loaded; ours shows (THAW's
+  Neversoft logo) and play resumes, no fault. (P8's C_s_int, 0x5ea3b6b7, is still the one noted to
+  crash the movie player with the goals loaded.)
+- work/iso/H THAW P8 movie test.iso (that build): on the PSP it tells whether our encoding plays on
+  hardware without p8eboot's intro patch, and whether in-level movies fit in PSP-1000 memory. ISO B
+  (P8 baseline: retail data + the intro patch) still to report: it tells whether the intro crash is
+  the patch rather than our movies.

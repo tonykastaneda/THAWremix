@@ -761,7 +761,8 @@ def main():
     elif sys.argv[1] == 'sponsor':  # <zone .pak.psp>
         sponsor(sys.argv[2])
     elif sys.argv[1] == 'zoneappend':  # <zone .pak.psp> <script> <qbc source, \n between lines>
-        zone_append(sys.argv[2], sys.argv[3], sys.argv[4].replace(chr(92) + 'n', chr(10)))
+        # (not after another backslash: "start\\ns_logo" is a path in a string)
+        zone_append(sys.argv[2], sys.argv[3], re.sub(r'(?<!\\)\\n', chr(10), sys.argv[4]))
     elif sys.argv[1] == 'zonerekey':  # <zone .pak.psp> <script> <old> <new>
         zone_rekey(*sys.argv[2:6])
     elif sys.argv[1] == 'missions':
