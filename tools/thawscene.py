@@ -295,6 +295,13 @@ def read_nodes(qb_path, zone, flags):
         fl = [x for x in d.get('_flags', []) if isinstance(x, str)]
         var = d.get('CreatedFromVariable')
         created = '$CreatedAtStart' in fl or (isinstance(var, str) and flags.get(_key(var), 0) != 0)
+        # time of day: THAW's tod_manager creates the CreatedFromTOD tod_nightoff_* pieces in daytime
+        # (the El Capitan tower's face, unlit streetlights, daytime shadows); the tod_nighton_* ones are
+        # night only. The daytime shadow layers (names with "shad") stay out: 57 KB over Houses' level
+        # size, and more coplanar layers to fight on the PSP
+        tod = d.get('CreatedFromTOD')
+        created = created or (isinstance(tod, str) and tod.lower().startswith('$tod_nightoff')
+                              and isinstance(d.get('Name'), str) and 'shad' not in d['Name'].lower())
         if cls in ('$LevelGeometry', '$LevelObject') and isinstance(d.get('Name'), str):
             place = (d['Pos'], d.get('Angles', [0, 0, 0])) if cls == '$LevelObject' and 'Pos' in d else None
             pieces[_key(d['Name'])] = (created, place)

@@ -1692,3 +1692,26 @@ PPSSPP (PSP-1000): all three play, then Hollywood.
   work/lifttest/n3/z_sc.psp_level (`--texel 4 --tess 800 --decal-lift 3`, oriented lift). Up close and
   at the diner in the normal renderer nothing floats visibly.
 - work/iso/N THAW P8 decal fix.iso: M plus that level (P8V_LEVEL). PPSSPP: intro, main menu.
+- PSP-3000 result for N: the worst spots the user pointed out are much better; posters on walls and
+  the street's white crossing lines still flicker.
+
+### Opaque overlays and THAW's daytime pieces (hardware test ISO O)
+
+- Posters, crossing paint and window sets are often their own *opaque* meshes laid in the plane of
+  a wall or road, so `decal()` (blended or alpha-cut materials) never picked them: 621 opaque meshes
+  lie coplanar with a larger mesh. `lift_decals` now also lifts a triangle of an opaque mesh where it
+  truly overlaps (`overlap_in_plane`: 2D separating axes, more than 0.25 in) a coplanar triangle of a
+  larger opaque mesh; pieces meeting only edge to edge (neighbouring road tiles) stay. Hollywood at
+  3 in: 1,340 such triangles, 9,756 vertices lifted in total.
+- Missing building near the metro (the user: never there, not popping): THAW's daytime pieces are
+  `CreatedFromTOD tod_nightoff_*` (its tod_manager creates them in daytime; `tod_nighton_*` is night
+  only), a field read_nodes ignored, so all 43 were dropped. One is
+  Z_HO_NightOff_05_HO_ElCapitan_tower: 15 vertices, but a face about 1,250 in tall on the El Capitan
+  tower. read_nodes now counts the daytime ones as created except the daytime shadow layers (names
+  with "shad": 57 KB over Houses' level size, and more coplanar layers); the rest cost 1.4 KB.
+  Whether P8 creates them at run time is not confirmed on screen yet (the test camera was blocked).
+- Metro area in both renderers (P8V_CAM at 2820,250,1690, four directions): nothing present in the
+  hardware renderer and missing in the software one, so no hardware-only draw failure there.
+- work/lifttest/e3/z_sc.psp_level (2,814,402 bytes): `--texel 4 --tess 800 --decal-lift 3`, at the
+  zero shift. PPSSPP: diner and story start look as before (no cracks).
+- work/iso/O THAW P8 overlay fix.iso: M plus that level. PPSSPP: intro, main menu.

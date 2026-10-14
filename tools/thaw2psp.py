@@ -314,13 +314,39 @@ def texture_sides(meshes, materials, max_side, texel):
     return sides
 
 
+def overlap_in_plane(t1, t2, nrm, eps=0.25):
+    """Whether two coplanar triangles overlap by more than eps inches (not merely touch): 2D
+    separating axes in their plane."""
+    u = np.cross(nrm, [0.0, 1.0, 0.0] if abs(nrm[1]) < 0.9 else [1.0, 0.0, 0.0])
+    u /= np.linalg.norm(u)
+    v = np.cross(nrm, u)
+    A = np.stack([t1 @ u, t1 @ v], 1)
+    B = np.stack([t2 @ u, t2 @ v], 1)
+    for T in (A, B):
+        for i in range(3):
+            e = T[(i + 1) % 3] - T[i]
+            ax = np.array([-e[1], e[0]])
+            ln = np.linalg.norm(ax)
+            if ln < 1e-9:
+                continue
+            ax /= ln
+            pa, pb = A @ ax, B @ ax
+            if pa.max() <= pb.min() + eps or pb.max() <= pa.min() + eps:
+                return False
+    return True
+
+
 def lift_decals(meshes, materials, textures, lift, log=print):
-    """THAW layers decals (window and shadow decals, road reflections, stains) on surfaces at the same
-    depth and draws them with a depth bias; the PSP has none, so they fight with the surface under
-    them. Each triangle of a decal mesh (blended material, or an alpha-tested cutout) that lies in the
-    plane of an overlapping triangle of an opaque mesh moves `lift` inches off it, to the side its
+    """THAW layers decals (window and shadow decals, road reflections, stains, posters, crossing paint)
+    on surfaces at the same depth and draws them with a depth bias; the PSP has none, so they fight
+    with the surface under them. A triangle moves `lift` inches off the surface, to the side its
     authored vertex normals face (the triangle's winding says nothing: culling is off, and lifting
-    along it put about half the decals behind their wall, where they never showed)."""
+    along it put about half the decals behind their wall, where they never showed), when it is
+      - in a decal mesh (blended material, or an alpha-tested cutout) and lies in the plane of an
+        overlapping triangle of an opaque mesh (bounding boxes), or
+      - in an opaque mesh and truly overlaps (overlap_in_plane) a coplanar triangle of a larger opaque
+        mesh: posters, crossing lines and window sets modelled as their own opaque pieces. Pieces that
+        only meet edge to edge (neighbouring road tiles) stay."""
     def decal(m):
         rec = materials.get(m.material)
         if not rec:
@@ -329,60 +355,59 @@ def lift_decals(meshes, materials, textures, lift, log=print):
             return True
         t = textures.get(struct.unpack_from('<I', rec, 0x40)[0])
         return t is not None and int(t[0][..., 3].min()) < 128
+
+    def triangles(m):
+        P = m.pos
+        for st in m.strips:
+            for a, b, c in zip(st[:-2], st[1:-1], st[2:]):
+                if a == b or b == c or a == c:
+                    continue
+                t = P[[a, b, c]]
+                nrm = np.cross(t[1] - t[0], t[2] - t[0])
+                ln = np.linalg.norm(nrm)
+                if ln < 1e-3:
+                    continue
+                yield (a, b, c), t, nrm / ln, ln / 2
     kind = [decal(m) for m in meshes]
+    area = [sum(x[3] for x in triangles(m)) for m in meshes]
     cell = 128.0
-    grid = {}  # opaque triangles by xz cell: (normal, plane d, bbox lo, bbox hi)
+    grid = {}  # opaque triangles by xz cell: (mesh, triangle, normal, plane d, bbox lo, bbox hi)
     for mi, m in enumerate(meshes):
         if kind[mi]:
             continue
-        P = m.pos
-        for st in m.strips:
-            for a, b, c in zip(st[:-2], st[1:-1], st[2:]):
-                if a == b or b == c or a == c:
-                    continue
-                t = P[[a, b, c]]
-                nrm = np.cross(t[1] - t[0], t[2] - t[0])
-                ln = np.linalg.norm(nrm)
-                if ln < 1e-3:
-                    continue
-                nrm = nrm / ln
-                lo, hi = t.min(0), t.max(0)
-                rec = (nrm, float(nrm @ t[0]), lo, hi)
-                for gx in range(int(lo[0] // cell), int(hi[0] // cell) + 1):
-                    for gz in range(int(lo[2] // cell), int(hi[2] // cell) + 1):
-                        grid.setdefault((gx, gz), []).append(rec)
-    moved_meshes = moved = flipped = 0
+        for _, t, nrm, _ in triangles(m):
+            lo, hi = t.min(0), t.max(0)
+            rec = (mi, t, nrm, float(nrm @ t[0]), lo, hi)
+            for gx in range(int(lo[0] // cell), int(hi[0] // cell) + 1):
+                for gz in range(int(lo[2] // cell), int(hi[2] // cell) + 1):
+                    grid.setdefault((gx, gz), []).append(rec)
+    moved_meshes = moved = flipped = opaque = 0
     for mi, m in enumerate(meshes):
-        if not kind[mi]:
-            continue
         P = m.pos
         shift = np.zeros_like(P)
-        for st in m.strips:
-            for a, b, c in zip(st[:-2], st[1:-1], st[2:]):
-                if a == b or b == c or a == c:
+        for (a, b, c), t, nrm, _ in triangles(m):
+            away = m.nrm is not None and nrm @ m.nrm[[a, b, c]].sum(0) < 0
+            if away:
+                nrm = -nrm
+            ctr, lo, hi = t.mean(0), t.min(0), t.max(0)
+            for oj, ot, on, od, olo, ohi in grid.get((int(ctr[0] // cell), int(ctr[2] // cell)), ()):
+                if oj == mi or abs(on @ nrm) <= 0.995 or abs(on @ ctr - od) >= 1.0:
                     continue
-                t = P[[a, b, c]]
-                nrm = np.cross(t[1] - t[0], t[2] - t[0])
-                ln = np.linalg.norm(nrm)
-                if ln < 1e-3:
+                if not ((lo <= ohi + 0.5).all() and (hi >= olo - 0.5).all()):
                     continue
-                nrm = nrm / ln
-                away = m.nrm is not None and nrm @ m.nrm[[a, b, c]].sum(0) < 0
-                if away:
-                    nrm = -nrm
-                ctr, lo, hi = t.mean(0), t.min(0), t.max(0)
-                for on, od, olo, ohi in grid.get((int(ctr[0] // cell), int(ctr[2] // cell)), ()):
-                    if abs(on @ nrm) > 0.995 and abs(on @ ctr - od) < 1.0 and (lo <= ohi + 0.5).all() and (hi >= olo - 0.5).all():
-                        shift[[a, b, c]] = nrm * lift
-                        flipped += away
-                        break
+                if not kind[mi] and (area[oj] <= area[mi] or not overlap_in_plane(t, ot, on)):
+                    continue
+                shift[[a, b, c]] = nrm * lift
+                flipped += away
+                opaque += not kind[mi]
+                break
         hit = np.abs(shift).sum(1) > 0
         if hit.any():
             P[hit] += shift[hit]
             moved_meshes += 1
             moved += int(hit.sum())
-    log(f'decals lifted {lift} in: {moved} vertices in {moved_meshes} meshes '
-        f'({flipped} of their triangles wound against their normals: lifted the other way)')
+    log(f'decals lifted {lift} in: {moved} vertices in {moved_meshes} meshes ({opaque} triangles of opaque '
+        f'overlays; {flipped} wound against their normals: lifted the other way)')
 
 
 def build_level(meshes, materials, textures, delta, max_side, tess_len=400, log=print, offset=None, hidden=(),
