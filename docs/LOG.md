@@ -1629,3 +1629,15 @@ PPSSPP (PSP-1000): all three play, then Hollywood.
 - work/iso/J THAW P8 movie audio test.iso (PSP-1000 build, P8V_AUTO, P8V_NOINTRO,
   `P8V_PLAYMOVIE=t\t_new744,t\t_new560`): THAW's Neversoft logo encoded fresh from intro.bik
   (first 11.5 s) with 128 kbps audio, then the same at 96 kbps, then Hollywood. PPSSPP: both play.
+- PSP-3000 result for J (with and without ARK-4's forced extra memory): both Neversoft logos play
+  with sound, then Hollywood. Our movies (x264 video, 128 and 96 kbps ATRAC3plus, the new mux)
+  work on hardware.
+
+### THAW intro movies re-encoded (hardware test ISO K)
+
+- work/p8mod/movies/start re-encoded with the fixed pmfmux (template P8's own atvilogo,
+  `--crop 640:360:0:60`, 128 kbps audio): atvilogo <- ATVI.bik, ns_logo <- intro.bik first 11.5 s,
+  g_intro <- intro.bik from 11.5 s. The 352 kbps ones are kept in old_352k/.
+- work/iso/K THAW P8 intro.iso: the normal build (intro on: p8eboot's boot_movies patch, no test
+  switches). PPSSPP: Activision, Page 44, Shaba, Neversoft, THAW's intro, title, main menu. On the
+  PSP it also answers ISO B's open question (whether the patched intro path itself is safe).
