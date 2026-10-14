@@ -1641,3 +1641,22 @@ PPSSPP (PSP-1000): all three play, then Hollywood.
 - work/iso/K THAW P8 intro.iso: the normal build (intro on: p8eboot's boot_movies patch, no test
   switches). PPSSPP: Activision, Page 44, Shaba, Neversoft, THAW's intro, title, main menu. On the
   PSP it also answers ISO B's open question (whether the patched intro path itself is safe).
+- PSP-3000 result for B (P8 baseline: retail data + p8eboot's boot_movies patch): P8's legal screen,
+  then a crash before any movie. So the patch itself crashes on hardware, not our movies; K (same
+  patch) is moot.
+
+### The intro from the main menu script, executable as shipped (hardware test ISO L)
+
+- What the patch skipped: FUN_000927fc is P8's legal-screen timer. It returns 1 while the legal
+  screen has been up under 5 s (prints "Legal has been up for ..."), then clears its flag;
+  FUN_001db910 runs the intro scripts (0x36932fca, 0xaa37aeae) only once it returns 0. The old note
+  (always 1) came from a breakpoint in the first second. The nop started the intro while the legal
+  screen and boot loading were still running.
+- build.py: the executable is now always as shipped (`P8V_EBOOTINTRO=1` keeps the old patch for
+  comparison). Unless P8V_NOINTRO, `z_mainmenu_setup` in the main menu zone gets
+  `if not IsTrue thx_intro_done / change thx_intro_done = 1` and 0x287fb55a for start\atvilogo, p44,
+  shaba, ns_logo, g_intro (startup_loading_screen's PSP list), so the intro plays once when the main
+  menu first loads. (P8V_AUTO builds skip the main menu, so they show no intro.)
+- PPSSPP (PSP-1000): legal screen, Activision, Page 44, Shaba, Neversoft, THAW's intro, title, main
+  menu; no fault. Not yet checked: that leaving a level for the main menu does not replay it.
+- work/iso/L THAW P8 intro from menu.iso: this build.
