@@ -1660,3 +1660,10 @@ PPSSPP (PSP-1000): all three play, then Hollywood.
 - PPSSPP (PSP-1000): legal screen, Activision, Page 44, Shaba, Neversoft, THAW's intro, title, main
   menu; no fault. Not yet checked: that leaving a level for the main menu does not replay it.
 - work/iso/L THAW P8 intro from menu.iso: this build.
+- PSP-3000 results: K (p8eboot patch, new movies) and L (menu script) both play the intro and reach
+  the game. So the patch is not what crashed B (B predates the later fixes; not looked into further).
+  Both show a hitch between ns_logo and g_intro (THAW's one intro.bik split at 11.5 s).
+- Intro now (menu script): Activision, then g_intro = THAW's whole intro.bik as one movie (it opens
+  with the Neversoft logo). P8's Page 44 and Shaba left out, at the user's request.
+  work/iso/M THAW P8 intro.iso; PPSSPP: Activision, Neversoft into THAW's intro with no break, title,
+  main menu.
