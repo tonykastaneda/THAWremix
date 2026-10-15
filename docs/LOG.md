@@ -1763,3 +1763,17 @@ PPSSPP (PSP-1000): all three play, then Hollywood.
 - P8V_CAM takes an optional pitch (fifth value); its sign flips with yaw (to fix).
 - work/iso/P THAW P8 flicker fix.iso: intro build, level work/lifttest/p5 (texel 4, tess 800,
   decal lift 5 with top-up), skater fix. PPSSPP: intro, main menu.
+
+### Distant crosswalk flicker: a per-material depth bias (test ISO Q)
+
+- ISO P in the software renderer: road paint near the camera holds; farther crosswalk lines comb
+  (user: every crosswalk). P8's camera (FUN_00093ebc via FUN_000980e8): infinite far plane, near =
+  8/8192 view units (DAT_00361da8 = 8.0), 16-bit depth = 1/distance; the data sits in the second
+  segment (runtime 0x08804000 + 0x378f28 + 0x7c450). A fixed lift can't hold at every distance.
+- Every material list already sets the viewport depth centre (GE 0x47 = 32750, copied from the stock
+  lists): moving it per material is a depth bias in depth units, so it holds at any distance.
+  `thaw2psp --decal-bias N`: the meshes `lift_decals` moved get lists with the centre N units nearer
+  (biasing every alpha-tested material, trees and fences too, was too broad). `--decal-bias 0`
+  reproduces p5 byte for byte.
+- work/lifttest/q4 (`--decal-lift 5 --decal-bias 4`): 322 biased lists, 2,832,690 bytes.
+  work/iso/"Q THAW P8 decal depth bias.iso" = P with that level.

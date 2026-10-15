@@ -151,8 +151,13 @@ def white_texture():
 
 # ---------------------------------------------------------------- materials
 
-def material_list(tex, blend, fixed_alpha, wrap_flags):
-    """GE words for one material; every list sets the full state."""
+Z_CENTER = 32750.0  # viewport depth centre (GE 0x47) of every material list, as in the stock levels
+
+
+def material_list(tex, blend, fixed_alpha, wrap_flags, zbias=0):
+    """GE words for one material; every list sets the full state. zbias: depth units the material
+    is drawn nearer (the viewport's depth centre moves; depth is 1/distance, so this is a depth bias
+    whose world size grows with distance, like THAW's own decal bias)."""
     lv = tex['levels']
     w = [ge(0xB0, tex['clut']), ge(0xC4, 2), ge(0xD0, 0x4141C9)]
     for i in range(4):
@@ -177,7 +182,7 @@ def material_list(tex, blend, fixed_alpha, wrap_flags):
         w += [ge(0xDB, 0xFF0207), ge(0x21, 1), ge(0xDF, 0xA2), ge(0xE0, 0xFFFFFF), ge(0xE1, 0xFFFFFF)]
     else:
         w += [ge(0xDB, 0xFF0207), ge(0x21, 1), ge(0xDF, 0x32)]
-    w += [ge(0x47, 0x46FFDC), ge(0xCB, 0), GE_RET]
+    w += [ge(0x47, struct.unpack('<I', struct.pack('<f', Z_CENTER + zbias))[0] >> 8), ge(0xCB, 0), GE_RET]
     return w
 
 
@@ -364,7 +369,8 @@ def lift_decals(meshes, materials, textures, lift, log=print):
         overlapping triangle of an opaque mesh (bounding boxes), or
       - in an opaque mesh and truly overlaps (overlap_in_plane) a coplanar triangle of a larger opaque
         mesh: posters, crossing lines and window sets modelled as their own opaque pieces. Pieces that
-        only meet edge to edge (neighbouring road tiles) stay."""
+        only meet edge to edge (neighbouring road tiles) stay.
+    Returns the ids of the meshes moved (build_level's `biased`)."""
     def decal(m):
         rec = materials.get(m.material)
         if not rec:
@@ -400,6 +406,7 @@ def lift_decals(meshes, materials, textures, lift, log=print):
                 for gz in range(int(lo[2] // cell), int(hi[2] // cell) + 1):
                     grid.setdefault((gx, gz), []).append(rec)
     moved_meshes = moved = flipped = opaque = 0
+    layered = set()
     for mi, m in enumerate(meshes):
         P = m.pos
         shift = np.zeros_like(P)
@@ -427,14 +434,16 @@ def lift_decals(meshes, materials, textures, lift, log=print):
         hit = np.abs(shift).sum(1) > 0
         if hit.any():
             P[hit] += shift[hit]
+            layered.add(id(m))
             moved_meshes += 1
             moved += int(hit.sum())
     log(f'decals lifted {lift} in: {moved} vertices in {moved_meshes} meshes ({opaque} triangles of opaque '
         f'overlays; {flipped} wound against their normals: lifted the other way)')
+    return layered
 
 
 def build_level(meshes, materials, textures, delta, max_side, tess_len=400, log=print, offset=None, hidden=(),
-                texel=0, tess_ground=0, tess_low=None):
+                texel=0, tess_ground=0, tess_low=None, biased=(), zbias=0):
     tb = TexBlock(max_side)
     sides = texture_sides(meshes, materials, max_side, texel) if texel else {}
     lists = [[GE_RET]]  # word 0: never selected explicitly
@@ -442,7 +451,8 @@ def build_level(meshes, materials, textures, delta, max_side, tess_len=400, log=
     mat_info = {}
     list_word = {}
     for m in meshes:
-        if m.material in mat_info:
+        key = (m.material, id(m) in biased)
+        if key in mat_word:
             continue
         rec = materials.get(m.material)
         tcks = struct.unpack_from('<I', rec, 0x40)[0] if rec else 0
@@ -451,11 +461,11 @@ def build_level(meshes, materials, textures, delta, max_side, tess_len=400, log=
         else:
             tex = tb.add('white', white_texture())
         mat_info[m.material] = classify(rec, tex) if rec else (0, 'opaque', 1.0, (False, False))
-        words = tuple(material_list(tex, mat_info[m.material][1], mat_info[m.material][2], mat_info[m.material][3]))
+        words = tuple(material_list(tex, *mat_info[m.material][1:4], zbias=zbias if key[1] else 0))
         if words not in list_word:
             list_word[words] = sum(len(x) for x in lists)
             lists.append(words)
-        mat_word[m.material] = list_word[words]
+        mat_word[key] = list_word[words]
     texcmds = [w for x in lists for w in x]
     # material switches are signed 16-bit word indices
     assert len(texcmds) < 32768, f'{len(texcmds)} material list words'
@@ -482,7 +492,7 @@ def build_level(meshes, materials, textures, delta, max_side, tess_len=400, log=
         for s in m.strips:
             for seq in split_strip(attr, s, None if far else tess_len * 4, None if far or not tess_ground else tess_ground * 4,
                                    None if far or not tess_low else (tess_low[0] * 4 - offset[2], tess_low[1] * 4)):
-                pending.append((pas, mat_word[m.material], m.sector, seq))
+                pending.append((pas, mat_word[m.material, id(m) in biased], m.sector, seq))
     cell = 16384.0
     while True:
         keys = {}
@@ -808,6 +818,8 @@ def main():
     ap.add_argument('--tess-low', type=float, nargs=2, metavar=('HEIGHT', 'EDGE'),
                     help='longest edge for triangles reaching below world height HEIGHT (the street band)')
     ap.add_argument('--decal-lift', type=float, default=0, help='inches decals move off the surface under them')
+    ap.add_argument('--decal-bias', type=float, default=0,
+                    help='depth units decals and lifted overlays are drawn nearer (with --decal-lift)')
     ap.add_argument('--max-radius', type=float, default=0, help='drop meshes with a larger bounding radius')
     ap.add_argument('--no-props', action='store_true', help='leave out GameObject props')
     ap.add_argument('--col-base', help='also write <name>.props.col: this collision file (THAW PS2, for Project 8) '
@@ -835,10 +847,9 @@ def main():
         textures = {**ptex, **textures}
         print(f'props: {len(pm)} meshes, {len(prop_cols)} collision objects')
     os.makedirs(a.outdir, exist_ok=True)
-    if a.decal_lift:
-        lift_decals(meshes, materials, textures, a.decal_lift)
+    biased = lift_decals(meshes, materials, textures, a.decal_lift) if a.decal_lift else set()
     lvl = build_level(meshes, materials, textures, delta, a.tex, a.tess, hidden=hidden, texel=a.texel,
-                      tess_ground=a.tess_ground, tess_low=a.tess_low)
+                      tess_ground=a.tess_ground, tess_low=a.tess_low, biased=biased, zbias=a.decal_bias)
     open(os.path.join(a.outdir, f'{a.name}.psp_level'), 'wb').write(lvl)
     print(f'{a.name}.psp_level {len(lvl)} bytes')
 
