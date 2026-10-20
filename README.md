@@ -6,14 +6,17 @@ loads, renders and is skateable, with story goals, THAW's HUD, menus, pause map,
 movies; `tools/mkumd.py` builds a bootable UMD image. Work has started on the same for the Project 8
 PSP mod, which shares THAW's engine generation (`tools/p8zone.py`).
 
-No game data is in this repository. Status, findings and open gaps are in [docs/LOG.md](docs/LOG.md).
+Original disc images and installations are excluded. Selected generated restore inputs
+(Q geometry, custom logos and the menu backdrop) are versioned in this private backup.
+Start with [CONTEXT.md](CONTEXT.md) and [docs/RESTORE.md](docs/RESTORE.md) after cloning.
+Status, findings and open gaps are in [docs/LOG.md](docs/LOG.md).
 
 ## Local inputs (not committed)
 
 | Path | Holds |
 |---|---|
 | `isos/` | THUG2 Remix, THAW PS2 and Project 8 disc images |
-| `THAW CLEAN/Game` | THAW PC install, read by the converters (a junction to `..\THX\THAW CLEAN`) |
+| `THAW CLEAN/Game` | THAW PC install, read by the converters; restore this input or a junction to it |
 | `extracted/` | The images unpacked (`remix_psp`, `remix_data`, `thaw_ps2`, `thaw_ps2_data`), `dbg` names, Ghidra decompilation |
 | `work/` | Builds, patched game trees, screenshots |
 | `bin/pyenv` | Python venv with capstone, for `tools/mipsdis.py` |

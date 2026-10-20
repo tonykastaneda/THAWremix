@@ -10,6 +10,7 @@ Backup/handoff updated 2026-10-20. Private remote: `tonykastaneda/THAWremix`.
    build is **Q THAW P8 decal depth bias.iso** (2026-10-14). It uses per-material viewport
    depth bias for distant crosswalk flicker. Hardware results for Q are not recorded here.
 4. `docs/memorybudget.md` before increasing geometry, texture or ped memory.
+5. `docs/RESTORE.md` for the audited fresh-clone inputs and restore sequence.
 
 This ports THAW Hollywood to PSP Project 8, using the older THUG2 Remix port as a
 reference. Current open rendering problems include near-camera geometry dropping out,
@@ -22,7 +23,8 @@ All tracked conversion, archive, QB, executable and emulator tools in `tools/`,
 Ghidra's `ghidra/scripts/DecompAll.java`, documentation/history, and selected original
 build/debug scripts at their original `work/` paths. Those scripts were previously
 hidden by the broad work-directory ignore. They are explicitly tracked now; other
-generated work stays ignored. The logo-generation script is included too.
+generated work stays ignored. The logo-generation script, custom logo/menu images,
+and latest Q geometry/collision outputs are included too.
 
 Dependencies: Python with `numpy`, `Pillow` and `capstone` (`requirements.txt`),
 PPSSPP, FFmpeg for movie work, and the patched ATRAC encoder described in
@@ -45,10 +47,11 @@ python work/p8v/build.py
 THAW PC `THAW CLEAN/Game` input; unpack to the paths in README. Restore/recreate
 `work/p8v/tree` from vanilla Project 8 v1.00. The build saves and restores pristine
 `datap.hed.orig`, `datap.wad.orig`, `BOOT.BIN.orig`, and `EBOOT.BIN.orig` beside itself.
-It also consumes previous conversion outputs under `work/p8mod`, front-end inputs
-under `work/p8v`, backdrop/logo images, and converted movies. These generated data
-are local only. Follow the build script and LOG to regenerate them; this backup has
-not been tested as an automated fresh-machine rebuild.
+It also needs Project Mod's HED/WAD, THAW PS2 inputs, Remix physics, debug names and
+converted startup movies. `docs/RESTORE.md` identifies the exact paths and explains
+the remaining prerequisites. Custom logos, the menu backdrop and Q geometry are
+tracked now. This backup has not been tested as an automated fresh-machine rebuild.
+Set `P8V_LEVEL=work/lifttest/q4/z_sc.psp_level` to select Q; the default is older.
 
 Use `tools/mkumd.py` and the ISO command in `docs/CONTEXT.md` after building. Use the
 isolated `work/ppsspp_test` emulator for checks. Older `work/run_bg.py` targets THX
@@ -58,10 +61,12 @@ menu-backdrop experiment. `work/catch_*.py` are breakpoint/debug helpers;
 
 ## Backup boundary
 
-ISOs, extracted game data, generated trees, local emulator/encoder installations,
-screenshots and other bulky work remain on this PC. Nothing was moved or deleted
-during this backup. Keep those directories until separately backed up. Notification
-scripts and local automation settings are not required for building and remain local.
+The user plans to remove the local checkout and can supply the game assets again.
+ISOs, extracted game data, generated trees, the emulator and most screenshots are
+excluded from GitHub. `docs/local-files.tsv` records their paths/sizes and
+`docs/input-hashes.json` fingerprints important inputs; neither contains the data.
+The encoder binaries, custom images, Q geometry, tools and context are in GitHub.
+Notification scripts and local automation settings are not needed for building.
 
 Next: obtain Q's PSP/software-renderer results, continue the rendering fixes from
 the end of LOG, and record the exact build switches with each new hardware ISO.

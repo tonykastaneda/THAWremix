@@ -1,0 +1,87 @@
+[
+  {
+    "path": "work/p8v/atvilogo.pmf.orig",
+    "bytes": 1484800,
+    "sha256": "462f073d4dabdc5716e0ee1cd67c5fef4900849c2c566f50a805de2033133e2e"
+  },
+  {
+    "path": "work/p8v/BOOT.BIN.orig",
+    "bytes": 4453280,
+    "sha256": "2ca3ac3ac40d3bb907ead37e51c708683d6726ab948eef5c20e174011fcb46f9"
+  },
+  {
+    "path": "work/p8v/datap.hed.orig",
+    "bytes": 402356,
+    "sha256": "65d034d0ffec3261bf93abace8b61897c7ac0967265d14ca44bc8e033114361b"
+  },
+  {
+    "path": "work/p8v/datap.wad.orig",
+    "bytes": 376547328,
+    "sha256": "b25600226a779d21edac6058174745923e02ca37bdae719533ccf4ef9880123c"
+  },
+  {
+    "path": "work/p8v/EBOOT.BIN.orig",
+    "bytes": 4453616,
+    "sha256": "c7606ef8dc44e6a9b5be7a2d2c86409b83088851acf1ae31bc5dbbba85455b85"
+  },
+  {
+    "path": "work/p8v/g_intro.pmf.orig",
+    "bytes": 20504576,
+    "sha256": "87f320a0133ef9a7180ec6a410c017f175812dff40d02ec3c35b1f1423c11c23"
+  },
+  {
+    "path": "work/p8v/ICON0.PNG.orig",
+    "bytes": 11090,
+    "sha256": "dc221f91846a6a5c4ab49dc4cd112f17fe97dfb0323e5833e265dd216ee9834d"
+  },
+  {
+    "path": "work/p8v/ns_logo.pmf.orig",
+    "bytes": 5189632,
+    "sha256": "35533fbb72506044d721e3d560c7e8848038f97dc4be158c2067b43f847ae3eb"
+  },
+  {
+    "path": "work/p8v/PARAM.SFO.orig",
+    "bytes": 472,
+    "sha256": "5d1e2954343926918821f12c4138086673d24d756388f68c2aa95e9890f75e85"
+  },
+  {
+    "path": "work/p8v/PIC1.PNG.orig",
+    "bytes": 103358,
+    "sha256": "ee32f67fd87c82b0ac598d11595fa0c2599383bd0ac479d1efa8c8c07b1d2820"
+  },
+  {
+    "path": "work/p8v/SND0.AT3.orig",
+    "bytes": 280652,
+    "sha256": "6eb458aa059c093a11c46d033e69cfe6bf046db9ed83e54ede43392eb7e07f23"
+  },
+  {
+    "path": "isos/thpm_mod_public-BMX.iso",
+    "bytes": 721348608,
+    "sha256": "525d788fa4c7b08756dbc72ef6586691848162c6762aaf984a2c04b9b9b2598a"
+  },
+  {
+    "path": "work/p8mod/tree/PSP_GAME/USRDIR/datap.hed",
+    "bytes": 386016,
+    "sha256": "6611f4a6081ac975dbdd4b6bf2e564c800d3508daf4cc638a91ed9fed6b58ca5"
+  },
+  {
+    "path": "work/p8mod/tree/PSP_GAME/USRDIR/datap.wad",
+    "bytes": 318400512,
+    "sha256": "4ad2ece681545d59b60e1938d0bc1e04e9e4c530d917c30484cc4b268aad5d64"
+  },
+  {
+    "path": "work/p8mod/ho/z_sc.psp_level",
+    "bytes": 2813002,
+    "sha256": "83e46df0a950a381ea194e32836521a40e2369b4704e04ba703853a57d992269"
+  },
+  {
+    "path": "work/lifttest/q4/z_sc.col.ps2",
+    "bytes": 1153572,
+    "sha256": "90d13570ccdc6aef4976266678f4f234e0a4ee5b2d5b8186bd6a936f1a493efc"
+  },
+  {
+    "path": "work/lifttest/q4/z_sc.psp_level",
+    "bytes": 2832690,
+    "sha256": "dcd9cd478c2612526e81e96c05a17c5eba4ddfb129f9b51c41cc30611ad6c1a9"
+  }
+]

@@ -1,5 +1,10 @@
 # THAW on Project 8 (PSP): session context
 
+> Historical mission/build context from October 12–13. For the current handoff,
+> read `../CONTEXT.md` and `RESTORE.md`; rendering work through test ISO Q is at
+> the end of `LOG.md`. Current source attempts a dinosaur cutscene conversion,
+> so the older cutscene statements below are not a current validation result.
+
 Where the port stands, how the work is done, and what comes next. The detailed history is in
 `docs/LOG.md` (newest at the end); the memory plan is in `docs/memorybudget.md`.
 
