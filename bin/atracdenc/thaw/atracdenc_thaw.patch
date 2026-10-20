@@ -1,0 +1,88 @@
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index d34fd4a..58ceb5b 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -55,6 +55,7 @@ if (ATRACDENC_PCM_IO_BACKEND STREQUAL "auto")
+         set(ATRACDENC_PCM_IO_BACKEND "libsndfile")
+     endif()
+ elseif (NOT ATRACDENC_PCM_IO_BACKEND STREQUAL "mediafoundation" AND
++        NOT ATRACDENC_PCM_IO_BACKEND STREQUAL "rawwav" AND
+         NOT ATRACDENC_PCM_IO_BACKEND STREQUAL "libsndfile")
+     message(FATAL_ERROR "Unsupported ATRACDENC_PCM_IO_BACKEND: ${ATRACDENC_PCM_IO_BACKEND}")
+ endif()
+@@ -71,6 +72,10 @@ if (ATRACDENC_PCM_IO_BACKEND STREQUAL "mediafoundation")
+ 		platform/win/pcm_io/win32/pcm_io_win32.cpp
+ 		platform/win/pcm_io/pcm_io.cpp
+     )
++elseif (ATRACDENC_PCM_IO_BACKEND STREQUAL "rawwav")
++    set(SOURCE_PCM_IO_LIB
++        pcm_io_rawwav.cpp
++    )
+ else()
+     INCLUDE(FindLibSndFile)
+     if (NOT LIBSNDFILE_FOUND)
+diff --git a/src/atrac/at3p/at3p.cpp b/src/atrac/at3p/at3p.cpp
+index 97fbe04..01f6641 100644
+--- a/src/atrac/at3p/at3p.cpp
++++ b/src/atrac/at3p/at3p.cpp
+@@ -29,6 +29,14 @@
+ #include <cassert>
+ #include <vector>
+ #include <unordered_map>
++#include <cstdlib>
++
++// THAW P8 port: ATRAC3plus frame size in bytes (AT3P_FRAME_BYTES, default 2048 = 352 kbps;
++// 744 = 128 kbps and 560 = 96 kbps, as Sony's PSP movies use)
++static inline unsigned short At3pFrameBytes() {
++    const char* e = getenv("AT3P_FRAME_BYTES");
++    return e ? (unsigned short)atoi(e) : 2048;
++}
+ 
+ using std::vector;
+ 
+@@ -37,7 +45,7 @@ namespace NAtracDEnc {
+ class TAt3PEnc::TImpl {
+ public:
+     TImpl(ICompressedOutput* out, int channels, TSettings settings)
+-        : BitStream(out, 2048)
++        : BitStream(out, At3pFrameBytes())
+         , ChannelCtx(channels)
+         , GhaProcessor(MakeGhaProcessor0(channels == 2, settings.UseGha & TSettings::GHA_WIDEBAND, settings.WidebandRefineMode))
+         , Settings(settings)
+diff --git a/src/main.cpp b/src/main.cpp
+index 854105d..4a82fd5 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -43,6 +43,14 @@
+ #ifdef PLATFORM_WINDOWS
+ #include <windows.h>
+ #include <shellapi.h>
++#include <cstdlib>
++
++// THAW P8 port: ATRAC3plus frame size in bytes (AT3P_FRAME_BYTES, default 2048 = 352 kbps;
++// 744 = 128 kbps and 560 = 96 kbps, as Sony's PSP movies use)
++static inline unsigned short At3pFrameBytes() {
++    const char* e = getenv("AT3P_FRAME_BYTES");
++    return e ? (unsigned short)atoi(e) : 2048;
++}
+ #endif
+ 
+ using std::cout;
+@@ -449,7 +457,7 @@ static void PrepareAtrac3PEncoder(const string& inFile,
+ 
+     const string contName = ContainerName(container);
+     if (container == EContainer::RIFF) {
+-        omaIO = CreateAt3POutput(outFile, numChannels, numFrames, 2048);
++        omaIO = CreateAt3POutput(outFile, numChannels, numFrames, At3pFrameBytes());
+     } else if (container == EContainer::RAW) {
+         omaIO = CreateRawOutput(outFile, numChannels);
+     } else {
+@@ -457,7 +465,7 @@ static void PrepareAtrac3PEncoder(const string& inFile,
+             "test",
+             numChannels,
+             (int32_t)numFrames, OMAC_ID_ATRAC3PLUS,
+-            2048,
++            At3pFrameBytes(),
+             false));
+     }
+ 
